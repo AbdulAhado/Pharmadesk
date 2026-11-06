@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PharmaDesk — License Administration &amp; SaaS Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0F766E;
+      --primary-hover: #0D655E;
+      --primary-dim: #F0FDFA;
+      --primary-border: #CCFBF1;
+      --dark: #0A2E2C;
+      --slate-50: #F8FAFC;
+      --slate-100: #F1F5F9;
+      --slate-200: #E2E8F0;
+      --slate-300: #CBD5E1;
+      --slate-400: #94A3B8;
+      --slate-500: #64748B;
+      --slate-600: #475467;
+      --slate-700: #334155;
+      --slate-800: #1E293B;
+      --slate-900: #0F172A;
+      --text: #101828;
+      --card-bg: #FFFFFF;
+      --border: #EAECF0;
+      --success: #16A34A;
+      --success-dim: #DCFCE7;
+      --warning: #D97706;
+      --warning-dim: #FEF3C7;
+      --danger: #DC2626;
+      --danger-dim: #FEE2E2;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #F4F7F8;
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      font-size: 13.5px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Utilities ── */
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .badge-success { background: var(--success-dim); color: #15803D; }
+    .badge-warning { background: var(--warning-dim); color: #B45309; }
+    .badge-danger  { background: var(--danger-dim); color: #B91C1C; }
+    .badge-info    { background: var(--primary-dim); color: var(--primary); }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 250px;
+      min-width: 250px;
+      background: var(--dark);
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid #143D39;
+    }
+    .brand-box {
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #143D39;
+    }
+    .brand-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: #0D3E3A;
+      border: 1px solid #1F5550;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #2DD4BF;
+      font-size: 16px;
+    }
+    .brand-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .brand-sub { font-size: 11px; color: #76A19C; }
+
+    .nav-list { flex: 1; overflow-y: auto; padding: 14px 10px; display: flex; flex-direction: column; gap: 4px; }
+    .nav-label { font-size: 10.5px; font-weight: 700; color: #6E9B96; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 10px 4px; }
+    .nav-btn {
+      width: 100%;
+      text-align: left;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 8px;
+      color: #B5D2CF;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.12s ease;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,0.06); color: #FFFFFF; }
+    .nav-btn.active { background: #0E4743; color: #FFFFFF; font-weight: 700; }
+    .nav-btn .count { margin-left: auto; background: #DC2626; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 10.5px; font-weight: 700; }
+
+    /* ── Main Area ── */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+    header {
+      height: 56px;
+      min-height: 56px;
+      background: #FFFFFF;
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .page-title { font-size: 17px; font-weight: 700; color: var(--text); }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+
+    .content-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+    }
+
+    /* ── Cards & Grid ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: 0 1px 2px rgba(16,24,40,0.04);
+    }
+    .kpi-title { font-size: 12px; font-weight: 600; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.03em; }
+    .kpi-num { font-size: 26px; font-weight: 800; color: var(--text); margin: 6px 0 2px; }
+    .kpi-desc { font-size: 11.5px; color: var(--slate-500); }
+
+    .card {
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(16,24,40,0.04);
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .card-head {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #FFFFFF;
+    }
+    .card-title { font-size: 14.5px; font-weight: 700; color: var(--text); }
+    .card-body { padding: 18px 20px; }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th {
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--slate-500);
+      background: var(--slate-50);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12.5px;
+      color: var(--slate-700);
+      vertical-align: middle;
+    }
+    tr:hover td { background: #FBFDFD; }
+
+    /* ── Buttons & Forms ── */
+    .btn {
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.1s ease;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary { background: #FFFFFF; border-color: var(--border); color: var(--slate-700); }
+    .btn-secondary:hover { background: var(--slate-50); }
+    .btn-danger { background: #FEE2E2; color: #DC2626; border-color: #FECACA; }
+    .btn-danger:hover { background: #DC2626; color: #fff; }
+    .btn-sm { padding: 4px 10px; font-size: 11.5px; border-radius: 6px; }
+
+    .input-field {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      background: #FFFFFF;
+      outline: none;
+    }
+    .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15,118,110,0.12); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-box {
+      width: 95%;
+      max-width: 540px;
+      background: #FFFFFF;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; background: #F9FAFB; }
+
+    /* ── Login Overlay ── */
+    #login-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0A2E2C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .login-card {
+      width: 380px;
+      background: #FFFFFF;
+      border-radius: 16px;
+      padding: 32px 28px;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Login View ── -->
+  <div id="login-overlay">
+    <div class="login-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <div class="brand-logo" style="background:#0F766E;color:#fff;">P</div>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:var(--text);">PharmaDesk</div>
+          <div style="font-size:12px;color:var(--slate-500);">Software Owner Admin Portal</div>
+        </div>
+      </div>
+
+      <div id="login-error" style="display:none;background:#FEE2E2;color:#B91C1C;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:14px;"></div>
+
+      <form onsubmit="handleLogin(event)">
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--slate-700);margin-bottom:5px;">Admin Username</label>
+          <input type="text" id="login-user" value="admin@pharmadesk.pk" class="input-field" required>
+        </div>
+        <div style="margin-bottom:18px;">
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--slate-700);margin-bottom:5px;">Password</label>
+          <input type="password" id="login-pass" placeholder="••••••••••••" class="input-field" required>
+        </div>
+        <button type="submit" id="login-btn" class="btn btn-primary" style="width:100%;height:40px;justify-content:center;font-size:13.5px;">
+          Sign In to Control Center →
+        </button>
+      </form>
+      <div style="font-size:11px;color:var(--slate-400);text-align:center;margin-top:16px;">
+        PharmaDesk Cryptographic Licensing Engine v1.0 (Ed25519)
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Left Sidebar ── -->
+  <aside id="sidebar">
+    <div class="brand-box">
+      <div class="brand-logo">P</div>
+      <div>
+        <div class="brand-title">PharmaDesk</div>
+        <div class="brand-sub">SaaS License Control</div>
+      </div>
+    </div>
+
+    <nav class="nav-list">
+      <div class="nav-label">Management</div>
+      <button class="nav-btn active" onclick="switchTab('dashboard')">
+        <span>📊</span> Dashboard
+      </button>
+      <button class="nav-btn" onclick="switchTab('renewals')">
+        <span>🔄</span> Renewals <span class="count" id="pending-badge" style="display:none;">0</span>
+      </button>
+      <button class="nav-btn" onclick="switchTab('customers')">
+        <span>👥</span> Customers Directory
+      </button>
+      <button class="nav-btn" onclick="switchTab('subscriptions')">
+        <span>🔑</span> Subscriptions &amp; Keys
+      </button>
+      <button class="nav-btn" onclick="switchTab('devices')">
+        <span>💻</span> Bound Devices
+      </button>
+
+      <div class="nav-label">Configuration</div>
+      <button class="nav-btn" onclick="switchTab('plans')">
+        <span>📦</span> Plans &amp; Pricing
+      </button>
+      <button class="nav-btn" onclick="switchTab('audits')">
+        <span>📝</span> Audit Trail
+      </button>
+      <button class="nav-btn" onclick="switchTab('settings')">
+        <span>⚙️</span> SaaS Settings
+      </button>
+    </nav>
+
+    <div style="padding:14px 16px;border-top:1px solid #143D39;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#fff;" id="admin-user-display">Software Owner</div>
+        <div style="font-size:10.5px;color:#76A19C;">Super Admin</div>
+      </div>
+      <button onclick="handleLogout()" style="background:transparent;border:none;color:#94A3B8;cursor:pointer;font-size:11.5px;">Exit</button>
+    </div>
+  </aside>
+
+  <!-- ── Main Screen ── -->
+  <main id="main">
+    <header>
+      <div class="page-title" id="page-title-display">Dashboard Overview</div>
+      <div class="header-actions">
+        <button onclick="openIssueModal()" class="btn btn-primary btn-sm">+ Issue License</button>
+        <button onclick="loadCurrentTab()" class="btn btn-secondary btn-sm" title="Refresh">↻ Refresh</button>
+      </div>
+    </header>
+
+    <div class="content-body" id="view-content">
+      <!-- Dynamic Views Injected Here -->
+    </div>
+  </main>
+
+  <!-- ── Issue License Modal ── -->
+  <div class="modal-overlay" id="modal-issue">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Issue Signed Ed25519 License</span>
+        <button onclick="closeModal('modal-issue')" style="border:none;background:transparent;cursor:pointer;font-size:16px;">✕</button>
+      </div>
+      <form onsubmit="handleIssueLicenseSubmit(event)">
+        <div class="modal-body">
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Pharmacy Name *</label>
+            <input type="text" id="issue-pharmacy" class="input-field" placeholder="e.g. Health Plus Pharmacy" required>
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Workstation Hardware Device ID *</label>
+            <input type="text" id="issue-device" class="input-field mono" placeholder="PHD-XXXX-XXXX-XXXX-XXXX" required>
+          </div>
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Customer Phone / WhatsApp</label>
+            <input type="text" id="issue-phone" class="input-field" placeholder="0300-1234567">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Plan Type</label>
+              <select id="issue-plan" class="input-field">
+                <option value="MONTHLY">Monthly (30 Days)</option>
+                <option value="YEARLY" selected>Yearly (365 Days)</option>
+                <option value="LIFETIME">Lifetime Membership</option>
+                <option value="CUSTOM">Custom Duration</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Duration Days</label>
+              <input type="number" id="issue-days" value="365" class="input-field">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal('modal-issue')" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Sign &amp; Generate License</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Javascript Logic ── -->
+  <script>
+    const API_BASE = window.location.origin;
+    let currentTab = 'dashboard';
+    let token = localStorage.getItem('pharmadesk_admin_token') || '';
+
+    function checkAuth() {
+      if (token) {
+        document.getElementById('login-overlay').style.display = 'none';
+        loadCurrentTab();
+      } else {
+        document.getElementById('login-overlay').style.display = 'flex';
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const user = document.getElementById('login-user').value.trim();
+      const pass = document.getElementById('login-pass').value.trim();
+      const errBox = document.getElementById('login-error');
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass })
+        });
+        const data = await res.json();
+        if (data.success && data.token) {
+          token = data.token;
+          localStorage.setItem('pharmadesk_admin_token', token);
+          document.getElementById('login-overlay').style.display = 'none';
+          loadCurrentTab();
+        } else {
+          errBox.textContent = data.message || 'Login failed';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.textContent = 'Connection error to licensing backend';
+        errBox.style.display = 'block';
+      }
+    }
+
+    function handleLogout() {
+      localStorage.removeItem('pharmadesk_admin_token');
+      token = '';
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+
+    function switchTab(tabId) {
+      currentTab = tabId;
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      event?.currentTarget?.classList.add('active');
+      loadCurrentTab();
+    }
+
+    async function fetchAuth(url, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...(options.headers || {})
+      };
+      const res = await fetch(`${API_BASE}${url}`, { ...options, headers });
+      if (res.status === 401) {
+        handleLogout();
+        throw new Error('Session expired');
+      }
+      return res.json();
+    }
+
+    async function loadCurrentTab() {
+      const container = document.getElementById('view-content');
+      const titleDisplay = document.getElementById('page-title-display');
+
+      if (currentTab === 'dashboard') {
+        titleDisplay.textContent = 'Dashboard & Business Overview';
+        container.innerHTML = '<div>Loading statistics...</div>';
+        try {
+          const data = await fetchAuth('/api/v1/admin/stats');
+          const s = data.stats || {};
+
+          // Update pending count badge
+          if (s.pendingRenewalsCount > 0) {
+            const b = document.getElementById('pending-badge');
+            b.textContent = s.pendingRenewalsCount;
+            b.style.display = 'inline-block';
+          }
+
+          container.innerHTML = `
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-title">Active Subscriptions</div>
+                <div class="kpi-num" style="color:var(--primary);">${s.activeSubscriptions || 0}</div>
+                <div class="kpi-desc">Verified commercial licenses</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-title">Pending Renewals</div>
+                <div class="kpi-num" style="color:${s.pendingRenewalsCount > 0 ? '#DC2626' : 'var(--text)'};">${s.pendingRenewalsCount || 0}</div>
+                <div class="kpi-desc">Awaiting your approval</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-title">Registered Customers</div>
+                <div class="kpi-num">${s.totalCustomers || 0}</div>
+                <div class="kpi-desc">Pharmacy owners in database</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-title">Bound Workstations</div>
+                <div class="kpi-num">${s.registeredDevices || 0}</div>
+                <div class="kpi-desc">Active hardware PC bindings</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Recent Licensing Activity &amp; Audit Logs</span>
+                <button onclick="switchTab('audits')" class="btn btn-secondary btn-sm">View Full Log →</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Timestamp (UTC)</th>
+                    <th>Event</th>
+                    <th>License / Device</th>
+                    <th>Audit Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(data.recentActivity || []).map(a => `
+                    <tr>
+                      <td class="mono" style="font-size:11.5px;">${a.timestamp ? a.timestamp.slice(0,19).replace('T',' ') : '—'}</td>
+                      <td><span class="badge badge-info">${a.eventType}</span></td>
+                      <td class="mono">${a.licenseKey || a.deviceId || '—'}</td>
+                      <td>${a.details || ''}</td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="4" style="text-align:center;padding:24px;">No recent events recorded.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          container.innerHTML = `<div style="color:red;">Failed to load statistics: ${e.message}</div>`;
+        }
+      }
+
+      else if (currentTab === 'renewals') {
+        titleDisplay.textContent = 'Subscription Renewal Requests';
+        container.innerHTML = '<div>Loading renewal requests...</div>';
+        try {
+          const data = await fetchAuth('/api/v1/renewal-requests');
+          const requests = data.requests || [];
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Pending &amp; Processed Renewals</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Request #</th>
+                    <th>Customer / Pharmacy</th>
+                    <th>Plan</th>
+                    <th>Payment Ref</th>
+                    <th>Device ID</th>
+                    <th>Status</th>
+                    <th style="text-align:right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${requests.map(r => `
+                    <tr>
+                      <td class="mono font-bold">${r.requestNumber}</td>
+                      <td>
+                        <strong>${r.customerName}</strong>
+                        <div style="font-size:11px;color:var(--slate-500);">${r.customerPhone}</div>
+                      </td>
+                      <td><strong>${r.planName || r.requestedPlan}</strong> (PKR ${Number(r.pricePKR||0).toLocaleString()})</td>
+                      <td class="mono">${r.paymentReference || 'N/A'}</td>
+                      <td class="mono text-xs">${r.deviceId}</td>
+                      <td>
+                        <span class="badge ${r.status==='APPROVED'?'badge-success':(r.status==='PENDING'?'badge-warning':'badge-danger')}">
+                          ${r.status}
+                        </span>
+                      </td>
+                      <td style="text-align:right;">
+                        ${r.status === 'PENDING' ? `
+                          <button onclick="approveRenewal('${r.id}')" class="btn btn-primary btn-sm">✓ Approve &amp; Sign</button>
+                          <button onclick="rejectRenewal('${r.id}')" class="btn btn-danger btn-sm">Reject</button>
+                        ` : `<span style="font-size:11px;color:var(--slate-400);">Completed</span>`}
+                      </td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="7" style="text-align:center;padding:24px;">No renewal requests found.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          container.innerHTML = `<div style="color:red;">Error: ${e.message}</div>`;
+        }
+      }
+
+      else if (currentTab === 'customers') {
+        titleDisplay.textContent = 'Pharmacy Customer Directory';
+        container.innerHTML = '<div>Loading customers...</div>';
+        try {
+          const data = await fetchAuth('/api/v1/admin/customers');
+          const customers = data.customers || [];
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Registered Pharmacies (${customers.length})</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pharmacy Name</th>
+                    <th>Contact Person</th>
+                    <th>Phone / WhatsApp</th>
+                    <th>Email</th>
+                    <th>Registered At</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${customers.map(c => `
+                    <tr>
+                      <td><strong>${c.pharmacyName}</strong></td>
+                      <td>${c.name}</td>
+                      <td>${c.phone || '—'}</td>
+                      <td>${c.email || '—'}</td>
+                      <td style="font-size:11.5px;">${c.registeredAt ? c.registeredAt.slice(0,10) : '—'}</td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="5" style="text-align:center;padding:24px;">No customers found.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          container.innerHTML = `<div style="color:red;">Error: ${e.message}</div>`;
+        }
+      }
+
+      else if (currentTab === 'subscriptions') {
+        titleDisplay.textContent = 'Subscriptions &amp; Issued Licenses';
+        container.innerHTML = '<div>Loading subscriptions...</div>';
+        try {
+          const data = await fetchAuth('/api/v1/admin/subscriptions');
+          const subs = data.subscriptions || [];
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Active &amp; Issued Licenses</span>
+                <button onclick="openIssueModal()" class="btn btn-primary btn-sm">+ Issue License</button>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>License Key</th>
+                    <th>Pharmacy Name</th>
+                    <th>Plan</th>
+                    <th>Expiry Date</th>
+                    <th>Status</th>
+                    <th style="text-align:right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${subs.map(s => `
+                    <tr>
+                      <td class="mono font-bold" style="color:var(--primary);">${s.licenseKey}</td>
+                      <td>${s.pharmacyName || '—'}</td>
+                      <td><strong>${s.plan}</strong></td>
+                      <td>${s.isLifetime ? '∞ Lifetime' : (s.expiryDate ? s.expiryDate.slice(0,10) : '—')}</td>
+                      <td><span class="badge ${s.status==='ACTIVE'?'badge-success':'badge-danger'}">${s.status}</span></td>
+                      <td style="text-align:right;">
+                        <button onclick="extendSubPrompt('${s.id}')" class="btn btn-secondary btn-sm">+ Extend Days</button>
+                      </td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;">No licenses issued yet.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          container.innerHTML = `<div style="color:red;">Error: ${e.message}</div>`;
+        }
+      }
+
+      else if (currentTab === 'devices') {
+        titleDisplay.textContent = 'Registered Hardware Workstations';
+        container.innerHTML = '<div>Loading devices...</div>';
+        try {
+          const data = await fetchAuth('/api/v1/admin/devices');
+          const list = data.devices || [];
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Hardware Bound Workstations (${list.length})</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Device Hardware ID</th>
+                    <th>Pharmacy / Store</th>
+                    <th>Bound License</th>
+                    <th>Binding Date</th>
+                    <th>Status</th>
+                    <th style="text-align:right;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${list.map(d => `
+                    <tr>
+                      <td class="mono font-bold">${d.deviceId}</td>
+                      <td>${d.pharmacyName || '—'}</td>
+                      <td class="mono">${d.licenseKey || '—'}</td>
+                      <td>${d.boundAt ? d.boundAt.slice(0,10) : '—'}</td>
+                      <td><span class="badge ${d.isActive ? 'badge-success' : 'badge-danger'}">${d.isActive ? 'BOUND' : 'UNBOUND'}</span></td>
+                      <td style="text-align:right;">
+                        ${d.isActive ? `
+                          <button onclick="resetDeviceBinding('${d.id}')" class="btn btn-danger btn-sm">Reset / Unbind PC</button>
+                        ` : `<span style="font-size:11px;color:var(--slate-400);">Unbound</span>`}
+                      </td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;">No devices bound yet.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          container.innerHTML = `<div style="color:red;">Error: ${e.message}</div>`;
+        }
+      }
+
+      else if (currentTab === 'plans') {
+        titleDisplay.textContent = 'Subscription Plans &amp; Pricing';
+        container.innerHTML = '<div>Loading plans...</div>';
+        try {
+          const data = await fetchAuth('/api/v1/plans');
+          const plans = data.plans || [];
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Configured Subscription Plans</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Plan ID</th>
+                    <th>Display Name</th>
+                    <th>Duration</th>
+                    <th>Price (PKR)</th>
+                    <th>Max Devices</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${plans.map(p => `
+                    <tr>
+                      <td class="mono font-bold">${p.id}</td>
+                      <td><strong>${p.name}</strong></td>
+                      <td>${p.durationDays ? `${p.durationDays} Days` : 'Lifetime (No Expiry)'}</td>
+                      <td><strong>PKR ${Number(p.pricePKR||0).toLocaleString()}</strong></td>
+                      <td>${p.maxDevices || 1} Workstation(s)</td>
+                      <td><span class="badge badge-success">Active</span></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          container.innerHTML = `<div style="color:red;">Error: ${e.message}</div>`;
+        }
+      }
+
+      else if (currentTab === 'audits') {
+        titleDisplay.textContent = 'System Audit Trail &amp; Cryptographic History';
+        container.innerHTML = '<div>Loading audit logs...</div>';
+        try {
+          const data = await fetchAuth('/api/v1/admin/audits');
+          const logs = data.logs || [];
+          container.innerHTML = `
+            <div class="card">
+              <div class="card-head">
+                <span class="card-title">Cryptographic Logs &amp; Activity Trail (${logs.length})</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Timestamp (UTC)</th>
+                    <th>Event Type</th>
+                    <th>Target License / Device</th>
+                    <th>Event Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${logs.map(l => `
+                    <tr>
+                      <td class="mono" style="font-size:11.5px;">${l.timestamp ? l.timestamp.slice(0,19).replace('T',' ') : '—'}</td>
+                      <td><span class="badge badge-info">${l.eventType}</span></td>
+                      <td class="mono">${l.licenseKey || l.deviceId || '—'}</td>
+                      <td>${l.details || ''}</td>
+                    </tr>
+                  `).join('') || '<tr><td colspan="4" style="text-align:center;padding:24px;">No audit logs recorded yet.</td></tr>'}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } catch (e) {
+          container.innerHTML = `<div style="color:red;">Error: ${e.message}</div>`;
+        }
+      }
+    }
+
+    /* ── Action Handlers ── */
+    async function approveRenewal(id) {
+      const notes = prompt('Enter admin payment verification notes (e.g. Verified JazzCash TRX):', 'Payment verified by admin');
+      if (notes === null) return;
+      try {
+        const res = await fetchAuth(`/api/v1/renewal-requests/${id}/approve`, {
+          method: 'POST',
+          body: JSON.stringify({ adminNotes: notes })
+        });
+        alert(res.message || 'Renewal approved!');
+        loadCurrentTab();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function rejectRenewal(id) {
+      const reason = prompt('Enter rejection reason (e.g. Unverified payment reference):', 'Unverified transaction');
+      if (reason === null) return;
+      try {
+        const res = await fetchAuth(`/api/v1/renewal-requests/${id}/reject`, {
+          method: 'POST',
+          body: JSON.stringify({ reason })
+        });
+        alert(res.message || 'Renewal rejected.');
+        loadCurrentTab();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function extendSubPrompt(id) {
+      const days = prompt('Enter additional days to extend this subscription:', '30');
+      if (!days) return;
+      try {
+        const res = await fetchAuth(`/api/v1/admin/subscriptions/${id}/extend`, {
+          method: 'POST',
+          body: JSON.stringify({ additionalDays: parseInt(days, 10) })
+        });
+        alert(res.message);
+        loadCurrentTab();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function resetDeviceBinding(id) {
+      if (!confirm('Are you sure you want to unbind this computer? The customer will be able to activate on their new PC.')) return;
+      try {
+        const res = await fetchAuth(`/api/v1/admin/devices/${id}/reset`, { method: 'POST' });
+        alert(res.message);
+        loadCurrentTab();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    function openIssueModal() {
+      document.getElementById('modal-issue').style.display = 'flex';
+    }
+    function closeModal(id) {
+      document.getElementById(id).style.display = 'none';
+    }
+
+    async function handleIssueLicenseSubmit(e) {
+      e.preventDefault();
+      const pharmacy = document.getElementById('issue-pharmacy').value.trim();
+      const device = document.getElementById('issue-device').value.trim();
+      const phone = document.getElementById('issue-phone').value.trim();
+      const plan = document.getElementById('issue-plan').value;
+      const days = document.getElementById('issue-days').value;
+
+      try {
+        const res = await fetchAuth('/api/v1/admin/subscriptions/issue', {
+          method: 'POST',
+          body: JSON.stringify({
+            pharmacyName: pharmacy,
+            deviceId: device,
+            customerPhone: phone,
+            plan,
+            durationDays: days,
+            isLifetime: plan === 'LIFETIME'
+          })
+        });
+
+        alert(`Success! Generated License Key: ${res.licenseKey}\n\nClient can now activate online using this key.`);
+        closeModal('modal-issue');
+        loadCurrentTab();
+      } catch (err) {
+        alert('Failed to issue license: ' + err.message);
+      }
+    }
+
+    // Init
+    checkAuth();
+  </script>
+</body>
+</html>
+

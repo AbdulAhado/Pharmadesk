@@ -1,0 +1,8 @@
+# Licensing Server .gitignore
+node_modules/
+.env
+data/licensing_db.json
+*.log
+*.pem
+*.key
+

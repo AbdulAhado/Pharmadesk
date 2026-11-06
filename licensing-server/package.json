@@ -1,0 +1,23 @@
+{
+  "name": "pharmadesk-licensing-server",
+  "version": "1.0.0",
+  "description": "PharmaDesk Centralized Subscription & Ed25519 Licensing Backend",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node scripts/seedAdmin.js",
+    "keygen": "node scripts/generateKeys.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.8.0",
+    "morgan": "^1.10.0"
+  }
+}
+

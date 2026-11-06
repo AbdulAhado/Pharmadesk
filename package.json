@@ -1,0 +1,116 @@
+{
+  "name": "pharmadesk",
+  "version": "1.0.0",
+  "description": "Offline-first Pharmacy Management Desktop Application",
+  "main": "electron/main.js",
+  "homepage": "./",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
+    "build": "vite build",
+    "build:electron": "npm run build && electron-builder --win",
+    "dist": "npm run build && electron-builder --win",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "preview": "vite preview",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "licensing:server": "cd licensing-server && node src/server.js",
+    "licensing:seed": "cd licensing-server && node scripts/seedAdmin.js",
+    "admin:dev": "cd license-admin && npm run dev",
+    "admin:build": "cd license-admin && npm run build"
+  },
+  "keywords": [
+    "pharmacy",
+    "pos",
+    "electron",
+    "sqlite"
+  ],
+  "author": "PharmaDesk",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.8.0",
+    "date-fns": "^3.6.0",
+    "electron-updater": "^6.1.7",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.2",
+    "lucide-react": "^0.446.0",
+    "mongodb": "^7.8.0",
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^6.26.2",
+    "recharts": "^2.12.7",
+    "uuid": "^10.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.4.0",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9",
+    "eslint": "^9.9.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.11",
+    "vite": "^5.4.1",
+    "vitest": "^2.1.1",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.pharmadesk.desktop",
+    "productName": "PharmaDesk",
+    "copyright": "Copyright © 2026 PharmaDesk",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dist-renderer/**/*",
+      "electron/**/*",
+      "package.json",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!node_modules/.cache"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker",
+      "legalTrademarks": "PharmaDesk"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PharmaDesk",
+      "uninstallDisplayName": "PharmaDesk - Medical Store POS",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "artifactName": "${productName} Setup.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "pharmadesk",
+      "repo": "pharmadesk-pos",
+      "releaseType": "release"
+    }
+  }
+}
