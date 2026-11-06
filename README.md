@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <div align="center">
 
 <img src="assets/pharma-removebg-preview.png" alt="PharmaDesk Logo" width="120" height="120" />
@@ -214,3 +215,6 @@ Compiled installation artifacts will be output to:
 <sub>© 2026 PharmaDesk Systems. All rights reserved.</sub>
 
 </div>
+=======
+# Pharmadesk
+>>>>>>> origin/main
