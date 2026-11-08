@@ -79,6 +79,10 @@
       "!**/node_modules/.bin",
       "!node_modules/.cache"
     ],
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**/*"
+    ],
     "win": {
       "target": [
         {

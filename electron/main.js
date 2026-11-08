@@ -39,6 +39,19 @@ function createWindow() {
     mainWindow.maximize();
   });
 
+  // Allow F12 or Ctrl+Shift+I to toggle DevTools (helps debugging if any issue occurs)
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
+  // Log and handle load failures
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Electron] Failed to load ${validatedURL}: ${errorDescription} (Code: ${errorCode})`);
+  });
+
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
     if (process.env.OPEN_DEVTOOLS === 'true') {

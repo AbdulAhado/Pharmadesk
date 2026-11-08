@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard.jsx';
 import POS from './pages/POS.jsx';
@@ -645,11 +645,91 @@ function AppLayout() {
   );
 }
 
+/* ── Error Boundary to prevent blank screens ── */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('PharmaDesk UI Crash Error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#041328',
+          color: '#FFFFFF',
+          padding: 24,
+          fontFamily: "'Inter', system-ui, sans-serif",
+          textAlign: 'center'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 16,
+            padding: '32px 40px',
+            maxWidth: 600,
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          }}>
+            <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12, color: '#38BDF8' }}>
+              PharmaDesk Interface Error
+            </h2>
+            <p style={{ fontSize: 14, color: '#94A3B8', marginBottom: 20 }}>
+              The application encountered an unexpected interface error.
+            </p>
+            <div style={{
+              background: 'rgba(0,0,0,0.4)',
+              padding: 14,
+              borderRadius: 8,
+              fontSize: 12,
+              fontFamily: 'monospace',
+              color: '#F87171',
+              textAlign: 'left',
+              marginBottom: 24,
+              overflowX: 'auto',
+              whiteSpace: 'pre-wrap'
+            }}>
+              {this.state.error?.toString()}
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: '#0F766E',
+                color: '#FFF',
+                border: 'none',
+                padding: '10px 24px',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /* ── Root App ── */
 export default function App() {
   return (
-    <HashRouter>
-      <AppLayout />
-    </HashRouter>
+    <ErrorBoundary>
+      <HashRouter>
+        <AppLayout />
+      </HashRouter>
+    </ErrorBoundary>
   );
 }
