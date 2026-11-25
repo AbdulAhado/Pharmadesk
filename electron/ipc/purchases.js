@@ -9,9 +9,15 @@ module.exports = function(ipcMain) {
     const db = getDb();
     let sql = `
       SELECT s.*,
-        COALESCE(SUM(p.outstanding_amount), 0) AS total_outstanding
+        COALESCE(p_agg.total_outstanding, 0) AS total_outstanding,
+        ROUND(COALESCE(s.opening_balance, 0) + COALESCE(p_agg.total_outstanding, 0), 2) AS balance
       FROM suppliers s
-      LEFT JOIN purchases p ON p.supplier_id = s.id AND p.payment_status != 'PAID'
+      LEFT JOIN (
+        SELECT supplier_id, SUM(outstanding_amount) AS total_outstanding
+        FROM purchases
+        WHERE payment_status != 'PAID'
+        GROUP BY supplier_id
+      ) p_agg ON p_agg.supplier_id = s.id
     `;
     const params = [];
     const where = [];
@@ -22,7 +28,7 @@ module.exports = function(ipcMain) {
     }
     if (filters.isActive !== undefined) { where.push(`s.is_active=?`); params.push(filters.isActive ? 1 : 0); }
     if (where.length) sql += ` WHERE ${where.join(' AND ')}`;
-    sql += ` GROUP BY s.id ORDER BY s.name`;
+    sql += ` ORDER BY s.name`;
     return db.prepare(sql).all(...params);
   });
 
@@ -199,11 +205,12 @@ module.exports = function(ipcMain) {
 
       // Record initial payment if any
       if (paidAmount > 0 && data.supplier_id) {
+        const paymentDate = (data.purchase_date || data.invoice_date || new Date().toISOString()).slice(0, 10);
         db.prepare(`
           INSERT INTO supplier_payments (id, supplier_id, purchase_id, amount, payment_date, method, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `).run(uuidv4(), data.supplier_id, purchaseId, paidAmount,
-          data.purchase_date, data.payment_method || 'CASH', 'Payment with purchase');
+          paymentDate, data.payment_method || data.method || 'CASH', 'Payment with purchase');
       }
 
       // Sync outbox
@@ -222,21 +229,68 @@ module.exports = function(ipcMain) {
     const db = getDb();
     const tx = db.transaction(() => {
       const payId = uuidv4();
+      const paymentDate = (data.payment_date || data.paymentDate || new Date().toISOString()).slice(0, 10);
+      const paymentMethod = data.payment_method || data.method || 'CASH';
+      const paymentAmount = parseFloat(data.amount) || 0;
+
+      if (paymentAmount <= 0) {
+        throw new Error('Payment amount must be greater than zero');
+      }
+
       db.prepare(`
         INSERT INTO supplier_payments (id, supplier_id, purchase_id, amount, payment_date, method, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(payId, data.supplier_id, data.purchase_id || null,
-        data.amount, data.payment_date, data.method || 'CASH', data.notes || null);
+      `).run(
+        payId,
+        data.supplier_id,
+        data.purchase_id || null,
+        paymentAmount,
+        paymentDate,
+        paymentMethod,
+        data.notes || null
+      );
 
       if (data.purchase_id) {
         const purchase = db.prepare('SELECT * FROM purchases WHERE id=?').get(data.purchase_id);
         if (purchase) {
-          const newPaid = purchase.paid_amount + data.amount;
-          const newOutstanding = Math.max(0, purchase.total_amount - newPaid);
+          const newPaid = (purchase.paid_amount || 0) + paymentAmount;
+          const newOutstanding = Math.max(0, (purchase.total_amount || 0) - newPaid);
           const newStatus = newOutstanding <= 0 ? 'PAID' : newPaid > 0 ? 'PARTIAL' : 'UNPAID';
           db.prepare(`
             UPDATE purchases SET paid_amount=?, outstanding_amount=?, payment_status=? WHERE id=?
           `).run(newPaid, newOutstanding, newStatus, data.purchase_id);
+        }
+      } else if (data.supplier_id) {
+        // General payment towards supplier balance:
+        // Allocate against unpaid/partially paid purchases in FIFO order (oldest invoice first)
+        let remaining = paymentAmount;
+        const unpaidPurchases = db.prepare(`
+          SELECT * FROM purchases
+          WHERE supplier_id = ? AND payment_status != 'PAID' AND outstanding_amount > 0
+          ORDER BY purchase_date ASC, created_at ASC
+        `).all(data.supplier_id);
+
+        for (const p of unpaidPurchases) {
+          if (remaining <= 0) break;
+          const toPay = Math.min(remaining, p.outstanding_amount);
+          const newPaid = (p.paid_amount || 0) + toPay;
+          const newOutstanding = Math.max(0, (p.total_amount || 0) - newPaid);
+          const newStatus = newOutstanding <= 0 ? 'PAID' : newPaid > 0 ? 'PARTIAL' : 'UNPAID';
+
+          db.prepare(`
+            UPDATE purchases SET paid_amount=?, outstanding_amount=?, payment_status=? WHERE id=?
+          `).run(newPaid, newOutstanding, newStatus, p.id);
+
+          remaining -= toPay;
+        }
+
+        // If payment exceeds unpaid invoices and supplier has opening_balance, reduce opening balance
+        if (remaining > 0) {
+          const supplier = db.prepare('SELECT opening_balance FROM suppliers WHERE id=?').get(data.supplier_id);
+          if (supplier && supplier.opening_balance > 0) {
+            const newOpening = Math.max(0, supplier.opening_balance - remaining);
+            db.prepare(`UPDATE suppliers SET opening_balance=?, updated_at=datetime('now') WHERE id=?`).run(newOpening, data.supplier_id);
+          }
         }
       }
     });
@@ -251,7 +305,7 @@ module.exports = function(ipcMain) {
       FROM supplier_payments sp
       LEFT JOIN purchases p ON p.id=sp.purchase_id
       WHERE sp.supplier_id=?
-      ORDER BY sp.payment_date DESC
+      ORDER BY sp.payment_date DESC, sp.created_at DESC
     `).all(supplierId);
   });
 };

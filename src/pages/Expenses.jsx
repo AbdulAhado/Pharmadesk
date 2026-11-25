@@ -84,9 +84,13 @@ export default function Expenses() {
     e.preventDefault();
     const floatVal = parseFloat(openingFloat) || 0;
     try {
-      await api.expenses.openCashSession({ opening_balance: floatVal });
+      await api.expenses.openCashSession({
+        opening_cash: floatVal,
+        opening_balance: floatVal
+      });
       toast.success(`Cash session opened with float of ${fmt(floatVal)}!`);
       setOpenSessionModalOpen(false);
+      setOpeningFloat('');
       loadData();
     } catch (err) {
       toast.error('Failed to open cash session: ' + err.message);
@@ -98,11 +102,15 @@ export default function Expenses() {
     const actual = parseFloat(closingActual) || 0;
     try {
       await api.expenses.closeCashSession({
+        id: cashSession?.id,
+        counted_cash: actual,
         closing_balance: actual,
         notes: closingNotes
       });
       toast.success('Cash session closed successfully!');
       setCloseSessionModalOpen(false);
+      setClosingActual('');
+      setClosingNotes('');
       loadData();
     } catch (err) {
       toast.error('Failed to close session: ' + err.message);
@@ -453,19 +461,19 @@ export default function Expenses() {
       {/* ── Open Cash Drawer Modal ── */}
       {openSessionModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content max-w-sm">
-            <div className="modal-header">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                <Unlock size={18} className="text-emerald-400" /> Open Cash Session
+          <div className="modal-content max-w-sm bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="modal-header px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h3 className="modal-title text-base font-bold text-gray-900 flex items-center gap-2">
+                <Unlock size={18} className="text-emerald-700" /> Open Cash Session
               </h3>
-              <button onClick={() => setOpenSessionModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
+              <button onClick={() => setOpenSessionModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-md">
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleOpenCashSession} className="modal-body p-4 flex flex-col gap-4">
+            <form onSubmit={handleOpenCashSession} className="modal-body p-5 flex flex-col gap-4 bg-white">
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">
+                <label className="text-xs text-gray-700 font-semibold block mb-1">
                   Opening Float Cash (PKR)
                 </label>
                 <input
@@ -473,20 +481,21 @@ export default function Expenses() {
                   step="0.01"
                   required
                   autoFocus
+                  placeholder="0.00"
                   value={openingFloat}
                   onChange={(e) => setOpeningFloat(e.target.value)}
-                  className="input text-lg font-bold py-2 w-full text-emerald-400"
+                  className="input text-lg font-bold py-2 w-full text-emerald-700 border-gray-300"
                 />
-                <span className="text-[10px] text-slate-500 mt-1 block">
+                <span className="text-[11px] text-gray-500 mt-1 block">
                   The initial petty cash placed in the register for change.
                 </span>
               </div>
 
-              <div className="modal-footer pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button type="button" onClick={() => setOpenSessionModalOpen(false)} className="btn btn-secondary py-2">
+              <div className="modal-footer pt-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 -mx-5 -mb-5 px-5 py-3">
+                <button type="button" onClick={() => setOpenSessionModalOpen(false)} className="btn btn-secondary py-2 px-4 text-xs font-semibold">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary py-2 font-bold">
+                <button type="submit" className="btn btn-primary py-2 px-4 text-xs font-bold">
                   Open Drawer
                 </button>
               </div>
@@ -498,19 +507,40 @@ export default function Expenses() {
       {/* ── Close Cash Drawer Modal ── */}
       {closeSessionModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content max-w-sm">
-            <div className="modal-header">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                <Lock size={18} className="text-rose-400" /> End Day & Close Register
+          <div className="modal-content max-w-sm bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="modal-header px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h3 className="modal-title text-base font-bold text-gray-900 flex items-center gap-2">
+                <Lock size={18} className="text-rose-600" /> End Day &amp; Close Register
               </h3>
-              <button onClick={() => setCloseSessionModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
+              <button onClick={() => setCloseSessionModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-md">
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCloseCashSession} className="modal-body p-4 flex flex-col gap-4">
+            <form onSubmit={handleCloseCashSession} className="modal-body p-5 flex flex-col gap-4 bg-white">
+              {cashSession && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs space-y-1">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Opening Float:</span>
+                    <span className="font-semibold text-gray-900">{fmt(cashSession.opening_cash)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Cash Sales:</span>
+                    <span className="font-semibold text-emerald-700">+{fmt(cashSession.cash_sales)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Cash Expenses &amp; Returns:</span>
+                    <span className="font-semibold text-rose-600">-{fmt((cashSession.cash_expenses || 0) + (cashSession.cash_returns || 0))}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-1.5 font-bold text-gray-900">
+                    <span>Expected Drawer Cash:</span>
+                    <span className="text-teal-700">{fmt(cashSession.expected_closing_cash)}</span>
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">
+                <label className="text-xs text-gray-700 font-semibold block mb-1">
                   Actual Cash Counted in Drawer (PKR) *
                 </label>
                 <input
@@ -521,12 +551,12 @@ export default function Expenses() {
                   placeholder="Count physical cash"
                   value={closingActual}
                   onChange={(e) => setClosingActual(e.target.value)}
-                  className="input text-lg font-bold py-2 w-full text-emerald-400"
+                  className="input text-lg font-bold py-2 w-full text-teal-800 border-gray-300"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">
+                <label className="text-xs text-gray-700 font-semibold block mb-1">
                   Reconciliation Notes
                 </label>
                 <input
@@ -534,16 +564,16 @@ export default function Expenses() {
                   placeholder="e.g. 50 PKR shortage or all balanced"
                   value={closingNotes}
                   onChange={(e) => setClosingNotes(e.target.value)}
-                  className="input text-sm py-2 w-full"
+                  className="input text-xs py-2 w-full border-gray-300"
                 />
               </div>
 
-              <div className="modal-footer pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button type="button" onClick={() => setCloseSessionModalOpen(false)} className="btn btn-secondary py-2">
+              <div className="modal-footer pt-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 -mx-5 -mb-5 px-5 py-3">
+                <button type="button" onClick={() => setCloseSessionModalOpen(false)} className="btn btn-secondary py-2 px-4 text-xs font-semibold">
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-danger py-2 font-bold">
-                  Close & Reconcile
+                <button type="submit" className="btn btn-danger py-2 px-4 text-xs font-bold">
+                  Close &amp; Reconcile
                 </button>
               </div>
             </form>

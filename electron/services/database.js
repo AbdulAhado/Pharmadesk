@@ -465,6 +465,88 @@ const migrations = [
         CREATE INDEX IF NOT EXISTS idx_rr_status ON renewal_requests(status);
       `);
     }
+  },
+  {
+    version: 4,
+    description: 'Add mfg_date, status to batches; add old_quantity, new_quantity, user_name to stock_movements; create stock_adjustments table; migrate existing medicines without batches',
+    up: (db) => {
+      const safeAddColumn = (table, colName, colDef) => {
+        const info = db.prepare(`PRAGMA table_info(${table})`).all();
+        if (!info.some(c => c.name === colName)) {
+          db.exec(`ALTER TABLE ${table} ADD COLUMN ${colName} ${colDef}`);
+        }
+      };
+
+      // 1. Batches enhancements
+      safeAddColumn('batches', 'mfg_date', 'TEXT');
+      safeAddColumn('batches', 'status', "TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','BLOCKED','EXPIRED','QUARANTINED'))");
+
+      // Ensure any existing batch status is populated
+      db.prepare("UPDATE batches SET status = 'ACTIVE' WHERE status IS NULL OR status = ''").run();
+
+      // 2. Stock movements enhancements
+      safeAddColumn('stock_movements', 'old_quantity', 'INTEGER');
+      safeAddColumn('stock_movements', 'new_quantity', 'INTEGER');
+      safeAddColumn('stock_movements', 'user_name', "TEXT DEFAULT 'Administrator'");
+
+      // 3. Dedicated Stock Adjustments Audit Table
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS stock_adjustments (
+          id              TEXT PRIMARY KEY,
+          medicine_id     TEXT NOT NULL REFERENCES medicines(id),
+          batch_id        TEXT NOT NULL REFERENCES batches(id),
+          old_quantity    INTEGER NOT NULL,
+          new_quantity    INTEGER NOT NULL,
+          quantity_change INTEGER NOT NULL,
+          reason          TEXT NOT NULL,
+          notes           TEXT,
+          adjusted_by     TEXT DEFAULT 'Administrator',
+          created_at      TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_sa_medicine ON stock_adjustments(medicine_id);
+        CREATE INDEX IF NOT EXISTS idx_sa_batch    ON stock_adjustments(batch_id);
+        CREATE INDEX IF NOT EXISTS idx_sa_created  ON stock_adjustments(created_at);
+      `);
+
+      // 4. Safe Migration for Existing Medicines:
+      // If any existing medicines have no batches, create an initial opening batch
+      // using their default prices so stock calculations and POS work smoothly.
+      const medicinesWithoutBatches = db.prepare(`
+        SELECT m.* FROM medicines m
+        WHERE NOT EXISTS (SELECT 1 FROM batches b WHERE b.medicine_id = m.id)
+      `).all();
+
+      if (medicinesWithoutBatches && medicinesWithoutBatches.length > 0) {
+        const { v4: uuidv4 } = require('uuid');
+        const insertBatch = db.prepare(`
+          INSERT INTO batches (id, medicine_id, batch_number, mfg_date, expiry_date, purchase_cost, selling_price, received_quantity, available_quantity, status)
+          VALUES (?, ?, ?, date('now'), date('now', '+2 years'), ?, ?, 0, 0, 'ACTIVE')
+        `);
+        for (const med of medicinesWithoutBatches) {
+          try {
+            insertBatch.run(
+              uuidv4(),
+              med.id,
+              'OPENING-01',
+              med.default_purchase_price || 0,
+              med.default_selling_price || 0
+            );
+          } catch (_) {
+            // Ignore if duplicate or already handled
+          }
+        }
+      }
+    }
+  },
+  {
+    version: 5,
+    description: 'Add hardware printer settings: paper_size (58mm default), printer_name, silent_print',
+    up: (db) => {
+      const insert = db.prepare('INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)');
+      insert.run('paper_size', '58mm');
+      insert.run('printer_name', '');
+      insert.run('silent_print', 'false');
+    }
   }
 ];
 
@@ -512,6 +594,9 @@ function seedDefaultSettings() {
     invoice_counter: '1000',
     purchase_prefix: 'PO',
     purchase_counter: '1000',
+    paper_size: '58mm',
+    printer_name: '',
+    silent_print: 'false',
   };
 
   const insert = db.prepare('INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)');
@@ -640,18 +725,18 @@ function seedSampleData() {
   `);
 
   const insertBarcode = db.prepare(`
-    INSERT INTO medicine_barcodes (id, medicine_id, barcode, is_primary)
-    VALUES (?, ?, ?, 1)
+    INSERT INTO barcodes (id, medicine_id, barcode_value, unit_type, unit_multiplier)
+    VALUES (?, ?, ?, 'PACK', 1)
   `);
 
   const insertBatch = db.prepare(`
-    INSERT INTO batches (id, medicine_id, batch_number, expiry_date, purchase_price, sale_price, initial_stock, current_stock, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+    INSERT INTO batches (id, medicine_id, batch_number, mfg_date, expiry_date, purchase_cost, selling_price, received_quantity, available_quantity, status)
+    VALUES (?, ?, ?, date('now', '-2 months'), ?, ?, ?, ?, ?, 'ACTIVE')
   `);
 
   const insertMovement = db.prepare(`
-    INSERT INTO stock_movements (id, medicine_id, batch_id, movement_type, quantity, balance_after, reference_number, notes)
-    VALUES (?, ?, ?, 'PURCHASE', ?, ?, 'INITIAL-SEED', 'Opening inventory batch')
+    INSERT INTO stock_movements (id, medicine_id, batch_id, movement_type, quantity_change, old_quantity, new_quantity, unit_cost, reason, user_name)
+    VALUES (?, ?, ?, 'OPENING', ?, 0, ?, ?, 'Opening inventory batch', 'System Seed')
   `);
 
   const seedTx = db.transaction(() => {

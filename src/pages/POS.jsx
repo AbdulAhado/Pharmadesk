@@ -575,12 +575,21 @@ export default function POS() {
     }
   };
 
-  const handlePrintReceipt = () => {
+  const handlePrintReceipt = async () => {
     const printContent = document.getElementById('receipt-print-area');
     if (!printContent) return;
 
     if (api?.print?.receipt) {
-      api.print.receipt(printContent.innerHTML);
+      try {
+        const res = await api.print.receipt(printContent.innerHTML);
+        if (res?.success) {
+          toast.success('Receipt sent to printer!');
+        } else if (res?.error && res.error !== 'cancelled') {
+          toast.error('Print error: ' + res.error);
+        }
+      } catch (err) {
+        toast.error('Print failed: ' + err.message);
+      }
     } else {
       window.print();
     }
@@ -1655,7 +1664,7 @@ export default function POS() {
                 <div style={{ textAlign: 'center', paddingBottom: 8, borderBottom: '1px dashed #000' }}>
                   <div style={{ fontWeight: 800, fontSize: 15, textTransform: 'uppercase' }}>{pharmacySettings.name}</div>
                   <div style={{ fontSize: 10, marginTop: 2 }}>{pharmacySettings.address}</div>
-                  <div style={{ fontSize: 10 }}>Ph: {pharmacySettings.phone} • {pharmacySettings.taxNumber}</div>
+                  <div style={{ fontSize: 10 }}>Ph: {pharmacySettings.phone} | {pharmacySettings.taxNumber}</div>
                 </div>
 
                 <div style={{ padding: '8px 0', borderBottom: '1px dashed #000', fontSize: 11, display: 'flex', justifyContent: 'space-between' }}>

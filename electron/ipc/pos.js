@@ -8,10 +8,10 @@ module.exports = function(ipcMain) {
     const s = `%${query}%`;
     return db.prepare(`
       SELECT m.*,
-        COALESCE(SUM(CASE WHEN date(b.expiry_date) > date('now') THEN b.available_quantity ELSE 0 END), 0) AS available_stock,
-        COALESCE(SUM(CASE WHEN date(b.expiry_date) > date('now') THEN b.available_quantity ELSE 0 END), 0) AS total_stock,
-        COALESCE(MIN(CASE WHEN date(b.expiry_date) > date('now') AND b.available_quantity > 0 THEN b.selling_price END), m.default_selling_price, 0) AS current_price,
-        COALESCE(MIN(CASE WHEN date(b.expiry_date) > date('now') AND b.available_quantity > 0 THEN b.selling_price END), m.default_selling_price, 0) AS sale_price
+        COALESCE(SUM(CASE WHEN COALESCE(b.status, 'ACTIVE') = 'ACTIVE' AND date(b.expiry_date) > date('now') THEN b.available_quantity ELSE 0 END), 0) AS available_stock,
+        COALESCE(SUM(CASE WHEN COALESCE(b.status, 'ACTIVE') = 'ACTIVE' AND date(b.expiry_date) > date('now') THEN b.available_quantity ELSE 0 END), 0) AS total_stock,
+        COALESCE(MIN(CASE WHEN COALESCE(b.status, 'ACTIVE') = 'ACTIVE' AND date(b.expiry_date) > date('now') AND b.available_quantity > 0 THEN b.selling_price END), m.default_selling_price, 0) AS current_price,
+        COALESCE(MIN(CASE WHEN COALESCE(b.status, 'ACTIVE') = 'ACTIVE' AND date(b.expiry_date) > date('now') AND b.available_quantity > 0 THEN b.selling_price END), m.default_selling_price, 0) AS sale_price
       FROM medicines m
       LEFT JOIN batches b ON b.medicine_id = m.id
       WHERE m.is_active = 1
@@ -55,8 +55,9 @@ module.exports = function(ipcMain) {
       FROM batches
       WHERE medicine_id = ?
         AND available_quantity > 0
+        AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
         AND date(expiry_date) > date('now')
-      ORDER BY expiry_date ASC
+      ORDER BY expiry_date ASC, created_at ASC
     `).all(medicineId);
   });
 
@@ -89,21 +90,22 @@ module.exports = function(ipcMain) {
         const medicine = db.prepare('SELECT * FROM medicines WHERE id=? AND is_active=1').get(item.medicine_id);
         if (!medicine) throw new Error(`Medicine not found or inactive`);
 
-        // Get available batches (FEFO order)
+        // Get available batches (strictly FEFO order: earliest expiry, only active, unexpired)
         let batches = db.prepare(`
           SELECT * FROM batches
           WHERE medicine_id = ?
             AND available_quantity > 0
+            AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
             AND date(expiry_date) > date('now')
-          ORDER BY expiry_date ASC
+          ORDER BY expiry_date ASC, created_at ASC
         `).all(item.medicine_id);
 
         const totalAvailable = batches.reduce((sum, b) => sum + b.available_quantity, 0);
         if (totalAvailable < qty) {
-          throw new Error(`Insufficient stock for "${medicine.name}". Available: ${totalAvailable}, Requested: ${qty}`);
+          throw new Error(`Insufficient saleable stock for "${medicine.name}". Available: ${totalAvailable}, Requested: ${qty}`);
         }
 
-        // If user explicitly picked a specific batch in cart, prioritize it first!
+        // If user explicitly picked a specific batch in cart, ensure it is active and not expired, then prioritize it
         const specificBatchId = item.batch_id || (item.batch && item.batch.id);
         if (specificBatchId) {
           const preferred = batches.find(b => b.id === specificBatchId);
@@ -189,6 +191,9 @@ module.exports = function(ipcMain) {
 
         // Deduct stock batch by batch
         for (const { batch, take } of si.batchAllocations) {
+          const oldQty = batch.available_quantity;
+          const newQty = oldQty - take;
+
           db.prepare(`
             UPDATE batches SET available_quantity = available_quantity - ?, updated_at=datetime('now')
             WHERE id=?
@@ -196,9 +201,12 @@ module.exports = function(ipcMain) {
 
           db.prepare(`
             INSERT INTO stock_movements (id, medicine_id, batch_id, movement_type,
-              quantity_change, unit_cost, reference_type, reference_id)
-            VALUES (?, ?, ?, 'SALE', ?, ?, 'SALE', ?)
-          `).run(uuidv4(), si.medicine.id, batch.id, -take, batch.purchase_cost, saleId);
+              quantity_change, unit_cost, reference_type, reference_id, old_quantity, new_quantity)
+            VALUES (?, ?, ?, 'SALE', ?, ?, 'SALE', ?, ?, ?)
+          `).run(uuidv4(), si.medicine.id, batch.id, -take, batch.purchase_cost, saleId, oldQty, newQty);
+
+          // Track deducted amount for next allocation
+          batch.available_quantity = newQty;
         }
       }
 

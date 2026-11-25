@@ -46,6 +46,15 @@ function AppLayout() {
     try {
       if (window.api?.license?.getStatus) {
         const info = await window.api.license.getStatus();
+        if (info?.isReadOnly && navigator.onLine && window.api?.license?.checkRenewalStatus) {
+          try {
+            const res = await window.api.license.checkRenewalStatus();
+            if (res?.isRenewed && res?.status) {
+              setLicenseInfo(res.status);
+              return;
+            }
+          } catch (_) {}
+        }
         setLicenseInfo(info);
       }
     } catch (_) {}

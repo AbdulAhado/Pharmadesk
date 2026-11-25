@@ -127,6 +127,8 @@ export default function SubscriptionPage() {
         toast.success(res.message);
         setLicense(res.status);
         setActiveTab('overview');
+      } else if (res.serverUnavailable) {
+        toast(res.message, { icon: '⚠️', duration: 5000 });
       } else {
         toast(res.message, { icon: 'ℹ️' });
       }

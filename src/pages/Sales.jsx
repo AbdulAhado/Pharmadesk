@@ -163,7 +163,7 @@ export default function Sales() {
 
   const handleReprintReceipt = (sale, items) => {
     const receiptHtml = `
-      <div style="font-family: monospace; font-size: 11px; padding: 10px; width: 280px; margin: auto;">
+      <div style="font-family: 'Courier New', monospace; font-size: 11px; padding: 4px; width: 100%; max-width: 200px; margin: auto; color: #000;">
         <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 6px;">
           <h3 style="margin: 0; font-size: 14px; text-transform: uppercase;">PharmaDesk Pharmacy</h3>
           <p style="margin: 2px 0;">Duplicate Receipt / Copy</p>

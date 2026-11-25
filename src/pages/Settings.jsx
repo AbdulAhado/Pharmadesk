@@ -39,10 +39,14 @@ export default function SettingsPage() {
 
   // Printer Form
   const [printerSettings, setPrinterSettings] = useState({
-    paper_size: '80mm', // '80mm' or '58mm'
+    paper_size: '58mm', // '58mm' (default) or '80mm'
+    printer_name: '',
+    silent_print: 'false',
     auto_print: '1',
     scanner_sound: '1'
   });
+  const [availablePrinters, setAvailablePrinters] = useState([]);
+  const [testingPrint, setTestingPrint] = useState(false);
 
   // Local Backup State
   const [backupDir, setBackupDir] = useState('');
@@ -103,7 +107,9 @@ export default function SettingsPage() {
         });
 
         setPrinterSettings({
-          paper_size: all.paper_size || '80mm',
+          paper_size: all.paper_size || '58mm',
+          printer_name: all.printer_name || '',
+          silent_print: all.silent_print ?? 'false',
           auto_print: all.auto_print ?? '1',
           scanner_sound: all.scanner_sound ?? '1'
         });
@@ -135,6 +141,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadSettings();
+
+    // Fetch dynamic printer list from Electron
+    if (api?.print?.getPrinters) {
+      api.print.getPrinters().then((printers) => {
+        setAvailablePrinters(printers || []);
+      }).catch(() => {});
+    }
 
     // Fetch dynamic application version from Electron
     if (api?.app?.getVersion) {
@@ -263,6 +276,26 @@ export default function SettingsPage() {
       toast.success('Printer settings saved!');
     } catch (err) {
       toast.error('Save failed: ' + err.message);
+    }
+  };
+
+  const handleTestReceipt = async () => {
+    setTestingPrint(true);
+    try {
+      if (api?.print?.testReceipt) {
+        const res = await api.print.testReceipt();
+        if (res?.success) {
+          toast.success('Test receipt sent to printer!');
+        } else if (res?.error && res.error !== 'cancelled') {
+          toast.error('Print failed: ' + res.error);
+        }
+      } else {
+        toast.error('Printer API unavailable');
+      }
+    } catch (err) {
+      toast.error('Print test failed: ' + err.message);
+    } finally {
+      setTestingPrint(false);
     }
   };
 
@@ -649,24 +682,14 @@ export default function SettingsPage() {
               Thermal POS Printer &amp; Barcode Scanner
             </h3>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-5 max-w-xl">
+              {/* Roll Width */}
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 600, color: '#4B6468', display: 'block', marginBottom: 8 }}>
                   Receipt Roll Width
                 </label>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer" style={{ color: '#0F2A2E', fontSize: 13.5 }}>
-                    <input
-                      type="radio"
-                      name="paper_size"
-                      value="80mm"
-                      checked={printerSettings.paper_size === '80mm'}
-                      onChange={(e) => setPrinterSettings({ ...printerSettings, paper_size: e.target.value })}
-                      style={{ accentColor: '#0F766E' }}
-                    />
-                    <span>80mm Thermal (Standard ESC/POS)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer" style={{ color: '#0F2A2E', fontSize: 13.5 }}>
+                  <label className="flex items-center gap-2 cursor-pointer p-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex-1" style={{ color: '#0F2A2E', fontSize: 13 }}>
                     <input
                       type="radio"
                       name="paper_size"
@@ -675,14 +698,97 @@ export default function SettingsPage() {
                       onChange={(e) => setPrinterSettings({ ...printerSettings, paper_size: e.target.value })}
                       style={{ accentColor: '#0F766E' }}
                     />
-                    <span>58mm Thermal (Compact)</span>
+                    <div>
+                      <div className="font-semibold text-teal-800">58mm Thermal (Compact / Mobile)</div>
+                      <div className="text-[11px] text-gray-500">48mm printable width • 384 dots • Standard portable POS</div>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer p-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 flex-1" style={{ color: '#0F2A2E', fontSize: 13 }}>
+                    <input
+                      type="radio"
+                      name="paper_size"
+                      value="80mm"
+                      checked={printerSettings.paper_size === '80mm'}
+                      onChange={(e) => setPrinterSettings({ ...printerSettings, paper_size: e.target.value })}
+                      style={{ accentColor: '#0F766E' }}
+                    />
+                    <div>
+                      <div className="font-semibold text-gray-800">80mm Thermal (Standard)</div>
+                      <div className="text-[11px] text-gray-500">72mm printable width • 576 dots • Standard desktop POS</div>
+                    </div>
                   </label>
                 </div>
               </div>
 
-              <div className="pt-2">
+              {/* Windows Target Printer Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label style={{ fontSize: 12.5, fontWeight: 600, color: '#4B6468' }}>
+                    Target Printer Device (Windows)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (api?.print?.getPrinters) {
+                        api.print.getPrinters().then(setAvailablePrinters).catch(() => {});
+                        toast.success('Printer list refreshed');
+                      }
+                    }}
+                    className="text-xs text-teal-700 hover:text-teal-900 font-semibold"
+                  >
+                    Refresh List
+                  </button>
+                </div>
+                <select
+                  value={printerSettings.printer_name}
+                  onChange={(e) => setPrinterSettings({ ...printerSettings, printer_name: e.target.value })}
+                  className="input text-xs py-2 w-full border-gray-300 bg-white"
+                >
+                  <option value="">Default Windows Printer (Prompt via Print Dialog)</option>
+                  {availablePrinters.map((p, idx) => (
+                    <option key={idx} value={p.name}>
+                      {p.name} {p.isDefault ? '(Windows Default)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Select your thermal receipt printer. When selected, print jobs route directly to this device.
+                </p>
+              </div>
+
+              {/* Direct / Silent Print Mode */}
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={printerSettings.silent_print === '1' || printerSettings.silent_print === 'true'}
+                    onChange={(e) => setPrinterSettings({ ...printerSettings, silent_print: e.target.checked ? 'true' : 'false' })}
+                    style={{ accentColor: '#0F766E', marginTop: 3 }}
+                  />
+                  <div>
+                    <div className="text-xs font-semibold text-gray-900">Direct / Silent Printing (One-Click)</div>
+                    <div className="text-[11px] text-gray-500">
+                      Print receipts immediately without displaying the Windows Print Dialog popup (requires a selected Target Printer above).
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Actions */}
+              <div className="pt-2 flex items-center gap-3">
                 <button type="submit" className="btn btn-primary" style={{ padding: '9px 20px' }}>
                   <Save size={16} /> Save Hardware Settings
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTestReceipt}
+                  disabled={testingPrint}
+                  className="btn btn-secondary flex items-center gap-2"
+                  style={{ padding: '9px 18px' }}
+                >
+                  <Printer size={16} className="text-teal-700" />
+                  {testingPrint ? 'Printing Test...' : 'Print Test Receipt (58mm)'}
                 </button>
               </div>
             </div>

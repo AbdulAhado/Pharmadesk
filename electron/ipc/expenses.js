@@ -55,49 +55,97 @@ module.exports = function(ipcMain) {
     return [...DEFAULT_CATEGORIES, ...custom].sort();
   });
 
+  function getSessionTotals(db, session) {
+    if (!session) return { cashSales: 0, cardSales: 0, cashExpenses: 0, cashReturns: 0, expected: 0 };
+
+    const cashSales = db.prepare(`
+      SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales
+      WHERE payment_method = 'CASH' AND status = 'COMPLETED'
+        AND (cash_session_id = ? OR (cash_session_id IS NULL AND datetime(sold_at) >= datetime(?)))
+    `).get(session.id, session.opened_at)?.total || 0;
+
+    const cardSales = db.prepare(`
+      SELECT COALESCE(SUM(total_amount), 0) AS total FROM sales
+      WHERE payment_method != 'CASH' AND status = 'COMPLETED'
+        AND (cash_session_id = ? OR (cash_session_id IS NULL AND datetime(sold_at) >= datetime(?)))
+    `).get(session.id, session.opened_at)?.total || 0;
+
+    const cashReturns = db.prepare(`
+      SELECT COALESCE(SUM(total_refund_amount), 0) AS total FROM sale_returns
+      WHERE payment_method = 'CASH'
+        AND (cash_session_id = ? OR (cash_session_id IS NULL AND datetime(returned_at) >= datetime(?)))
+    `).get(session.id, session.opened_at)?.total || 0;
+
+    const cashExpenses = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS total FROM expenses
+      WHERE payment_method = 'CASH'
+        AND (datetime(created_at) >= datetime(?) OR date(expense_date) >= date(?))
+    `).get(session.opened_at, session.opened_at)?.total || 0;
+
+    const expected = (session.opening_cash || 0) + cashSales - cashReturns - cashExpenses;
+    return { cashSales, cardSales, cashExpenses, cashReturns, expected };
+  }
+
   ipcMain.handle('expenses:getCashSession', () => {
     const db = getDb();
-    return db.prepare(`SELECT * FROM cash_sessions WHERE status='OPEN' ORDER BY opened_at DESC LIMIT 1`).get() || null;
+    const session = db.prepare(`SELECT * FROM cash_sessions WHERE status='OPEN' ORDER BY opened_at DESC LIMIT 1`).get() || null;
+    if (!session) return null;
+    const totals = getSessionTotals(db, session);
+    return {
+      ...session,
+      cash_sales: totals.cashSales,
+      card_sales: totals.cardSales,
+      cash_expenses: totals.cashExpenses,
+      cash_returns: totals.cashReturns,
+      expected_closing_cash: totals.expected
+    };
   });
 
-  ipcMain.handle('expenses:openCashSession', (_, data) => {
+  ipcMain.handle('expenses:openCashSession', (_, data = {}) => {
     const db = getDb();
     const existing = db.prepare(`SELECT id FROM cash_sessions WHERE status='OPEN'`).get();
     if (existing) throw new Error('A cash session is already open. Close it first.');
     const id = uuidv4();
+    const openingCash = Number(data.opening_cash ?? data.opening_balance ?? 0);
     db.prepare(`
       INSERT INTO cash_sessions (id, opened_at, opening_cash, status)
       VALUES (?, datetime('now'), ?, 'OPEN')
-    `).run(id, data.opening_cash || 0);
+    `).run(id, openingCash);
     return { id };
   });
 
-  ipcMain.handle('expenses:closeCashSession', (_, data) => {
+  ipcMain.handle('expenses:closeCashSession', (_, data = {}) => {
     const db = getDb();
-    const session = db.prepare(`SELECT * FROM cash_sessions WHERE id=? AND status='OPEN'`).get(data.id);
-    if (!session) throw new Error('No open cash session found with that ID.');
+    const targetId = data?.id || data?.sessionId;
+    let session = null;
+    if (targetId) {
+      session = db.prepare(`SELECT * FROM cash_sessions WHERE id=? AND status='OPEN'`).get(targetId);
+    }
+    // Fallback: If no ID was provided or ID did not match, find the currently open session
+    if (!session) {
+      session = db.prepare(`SELECT * FROM cash_sessions WHERE status='OPEN' ORDER BY opened_at DESC LIMIT 1`).get();
+    }
+    if (!session) throw new Error('No open cash session found to close.');
 
-    // Calculate expected closing cash
-    const today = new Date().toISOString().split('T')[0];
-    const cashSales = db.prepare(`
-      SELECT COALESCE(SUM(total_amount),0) AS total FROM sales
-      WHERE payment_method='CASH' AND date(sold_at) >= date(?)
-    `).get(session.opened_at)?.total || 0;
-
-    const cashExpenses = db.prepare(`
-      SELECT COALESCE(SUM(amount),0) AS total FROM expenses
-      WHERE payment_method='CASH' AND expense_date >= date(?)
-    `).get(session.opened_at)?.total || 0;
-
-    const expected = session.opening_cash + cashSales - cashExpenses;
+    const countedCash = Number(data.counted_cash ?? data.closing_balance ?? data.actualCash ?? 0);
+    const totals = getSessionTotals(db, session);
+    const expected = totals.expected;
+    const diff = countedCash - expected;
 
     db.prepare(`
       UPDATE cash_sessions
       SET closed_at=datetime('now'), expected_closing_cash=?, counted_closing_cash=?,
         cash_difference=?, status='CLOSED'
       WHERE id=?
-    `).run(expected, data.counted_cash, data.counted_cash - expected, data.id);
+    `).run(expected, countedCash, diff, session.id);
 
-    return { expected, counted: data.counted_cash, difference: data.counted_cash - expected };
+    return {
+      expected,
+      counted: countedCash,
+      difference: diff,
+      cashSales: totals.cashSales,
+      cashExpenses: totals.cashExpenses,
+      cashReturns: totals.cashReturns
+    };
   });
 };

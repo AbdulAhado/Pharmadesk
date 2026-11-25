@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   TruckIcon, Plus, Search, DollarSign, Calendar,
   FileText, CheckCircle2, AlertCircle, X, Trash2, Eye,
-  Building2, Phone, CreditCard, RefreshCw, Layers
+  Building2, Phone, CreditCard, RefreshCw, Layers, Check
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -21,7 +21,7 @@ export default function Purchases() {
 
   useEffect(() => {
     if (window.api?.license?.getStatus) {
-      window.api.license.getStatus().then(setLicenseInfo).catch(() => {});
+      window.api.license.getStatus().then(setLicenseInfo).catch(() => { });
     }
   }, []);
 
@@ -56,6 +56,8 @@ export default function Purchases() {
 
   // Payment Form
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [paymentNotes, setPaymentNotes] = useState('');
 
   const loadData = useCallback(async () => {
@@ -78,7 +80,7 @@ export default function Purchases() {
   useEffect(() => {
     loadData();
     if (api?.medicines) {
-      api.medicines.getAll({ active: 1 }).then((meds) => setAllMedicines(meds || [])).catch(() => {});
+      api.medicines.getAll({ active: 1 }).then((meds) => setAllMedicines(meds || [])).catch(() => { });
     }
   }, [loadData]);
 
@@ -205,6 +207,7 @@ export default function Purchases() {
       phone: '',
       email: '',
       address: '',
+      opening_balance: '',
       notes: ''
     });
     setSupplierModalOpen(true);
@@ -218,6 +221,7 @@ export default function Purchases() {
       phone: sup.phone || '',
       email: sup.email || '',
       address: sup.address || '',
+      opening_balance: sup.opening_balance || '',
       notes: sup.notes || ''
     });
     setSupplierModalOpen(true);
@@ -234,7 +238,10 @@ export default function Purchases() {
         await api.purchases.updateSupplier(editingSupplier.id, supplierFormData);
         toast.success('Supplier updated!');
       } else {
-        await api.purchases.createSupplier(supplierFormData);
+        await api.purchases.createSupplier({
+          ...supplierFormData,
+          opening_balance: parseFloat(supplierFormData.opening_balance) || 0
+        });
         toast.success('Supplier created!');
       }
       setSupplierModalOpen(false);
@@ -247,7 +254,10 @@ export default function Purchases() {
   // Record Payment
   const handleOpenRecordPayment = (sup) => {
     setPaymentSupplier(sup);
-    setPaymentAmount(sup.balance > 0 ? sup.balance.toFixed(2) : '');
+    const bal = parseFloat(sup.balance) || 0;
+    setPaymentAmount(bal > 0 ? bal.toFixed(2) : '');
+    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setPaymentMethod('CASH');
     setPaymentNotes('');
     setPaymentModalOpen(true);
   };
@@ -263,10 +273,12 @@ export default function Purchases() {
       await api.purchases.recordPayment({
         supplier_id: paymentSupplier.id,
         amount: amount,
-        payment_method: 'CASH',
+        payment_date: paymentDate || new Date().toISOString().slice(0, 10),
+        payment_method: paymentMethod || 'CASH',
+        method: paymentMethod || 'CASH',
         notes: paymentNotes
       });
-      toast.success(`Payment of ${fmt(amount)} recorded!`);
+      toast.success(`Payment of ${fmt(amount)} recorded successfully!`);
       setPaymentModalOpen(false);
       loadData();
     } catch (err) {
@@ -288,10 +300,10 @@ export default function Purchases() {
       {/* ── Top Bar ── */}
       <div className="card p-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <TruckIcon className="text-cyan-400" size={22} /> Purchases & Supplier Ledger
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <TruckIcon className="text-teal-700" size={22} /> Purchases & Supplier Ledger
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-gray-500 mt-0.5">
             Receive incoming medicine batches, stock replenishment, and manage supplier accounts
           </p>
         </div>
@@ -300,14 +312,14 @@ export default function Purchases() {
           {activeTab === 'invoices' ? (
             <button
               onClick={handleOpenNewInvoice}
-              className="btn btn-primary btn-sm flex items-center gap-1.5 font-bold shadow-lg shadow-cyan-900/30"
+              className="btn btn-primary btn-sm flex items-center gap-1.5 font-semibold bg-teal-700 hover:bg-teal-800 text-white shadow-sm"
             >
               <Plus size={16} /> New Purchase Invoice
             </button>
           ) : (
             <button
               onClick={handleOpenAddSupplier}
-              className="btn btn-primary btn-sm flex items-center gap-1.5 font-bold shadow-lg shadow-cyan-900/30"
+              className="btn btn-primary btn-sm flex items-center gap-1.5 font-semibold bg-teal-700 hover:bg-teal-800 text-white shadow-sm"
             >
               <Plus size={16} /> Add Supplier
             </button>
@@ -317,37 +329,39 @@ export default function Purchases() {
 
       {/* ── Tabs & Search Filter ── */}
       <div className="card p-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
           <button
             onClick={() => setActiveTab('invoices')}
-            className={`btn btn-sm text-xs font-semibold py-1.5 px-3 ${
-              activeTab === 'invoices' ? 'btn-primary' : 'btn-secondary'
-            }`}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold ${activeTab === 'invoices'
+              ? 'border border-gray-200 bg-white text-teal-800 shadow-sm'
+              : 'border border-transparent text-gray-500 hover:text-gray-800'
+              }`}
           >
-            Purchase Invoices ({invoices.length})
+            <FileText size={14} /> Purchase Invoices ({invoices.length})
           </button>
           <button
             onClick={() => setActiveTab('suppliers')}
-            className={`btn btn-sm text-xs font-semibold py-1.5 px-3 ${
-              activeTab === 'suppliers' ? 'btn-primary' : 'btn-secondary'
-            }`}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold ${activeTab === 'suppliers'
+              ? 'border border-gray-200 bg-white text-teal-800 shadow-sm'
+              : 'border border-transparent text-gray-500 hover:text-gray-800'
+              }`}
           >
-            Suppliers / Vendors ({suppliers.length})
+            <Building2 size={14} /> Suppliers / Vendors ({suppliers.length})
           </button>
         </div>
 
         <div className="flex items-center gap-2">
           <div className="relative w-64">
-            <Search className="absolute left-3 top-2 text-slate-400" size={15} />
+            <Search className="absolute left-3 top-2.5 text-gray-400" size={14} />
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search purchases or suppliers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="input pl-8 pr-3 py-1 text-xs w-full"
+              className="input pl-8 pr-3 py-1.5 text-xs w-full border-gray-300"
             />
           </div>
-          <button onClick={loadData} className="btn btn-secondary p-1.5" title="Refresh">
+          <button onClick={loadData} className="btn btn-secondary p-1.5 text-gray-600 hover:text-gray-900" title="Refresh">
             <RefreshCw size={14} />
           </button>
         </div>
@@ -359,50 +373,54 @@ export default function Purchases() {
           {activeTab === 'invoices' ? (
             /* ── Purchase Invoices Table ── */
             loading ? (
-              <div className="flex items-center justify-center h-48 text-slate-400">
+              <div className="flex items-center justify-center h-48 text-gray-400">
                 <RefreshCw className="animate-spin mr-2" size={20} /> Loading purchase records...
               </div>
             ) : invoices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-slate-500">
-                <FileText size={36} className="mb-2 stroke-1" />
-                <p>No purchase invoices found.</p>
+              <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+                <FileText size={36} className="mb-2 stroke-1 text-gray-300" />
+                <p className="text-sm font-medium">No purchase invoices found.</p>
+                <p className="text-xs text-gray-400 mt-1">Click "New Purchase Invoice" to record incoming stock.</p>
               </div>
             ) : (
               <table className="table w-full">
                 <thead>
-                  <tr>
-                    <th>Invoice #</th>
-                    <th>Supplier</th>
-                    <th>Date</th>
-                    <th className="text-right">Total Amount</th>
-                    <th className="text-right">Paid</th>
-                    <th className="text-right">Balance Due</th>
-                    <th className="text-center">Status</th>
-                    <th className="text-right">Action</th>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs">
+                    <th className="py-2.5 px-3">Invoice #</th>
+                    <th className="py-2.5 px-3">Supplier</th>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3 text-right">Total Amount</th>
+                    <th className="py-2.5 px-3 text-right">Paid</th>
+                    <th className="py-2.5 px-3 text-right">Balance Due</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100">
                   {invoices.map((inv) => {
                     const balance = (inv.total_amount || 0) - (inv.paid_amount || 0);
                     return (
-                      <tr key={inv.id} className="hover:bg-slate-800/40">
-                        <td className="font-mono font-semibold text-white">{inv.invoice_number}</td>
-                        <td className="font-semibold text-slate-200">{inv.supplier_name || '—'}</td>
-                        <td className="text-xs text-slate-400">{inv.invoice_date}</td>
-                        <td className="text-right font-medium text-white">{fmt(inv.total_amount)}</td>
-                        <td className="text-right text-emerald-400">{fmt(inv.paid_amount)}</td>
-                        <td className="text-right font-semibold text-rose-400">{fmt(balance)}</td>
-                        <td className="text-center">
-                          <span className={`badge text-[10px] ${
-                            balance <= 0 ? 'badge-success' : (inv.paid_amount > 0 ? 'badge-warning' : 'badge-danger')
-                          }`}>
-                            {balance <= 0 ? 'Paid' : (inv.paid_amount > 0 ? 'Partial' : 'Unpaid')}
+                      <tr key={inv.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-2.5 px-3 font-mono font-semibold text-gray-900">{inv.invoice_number}</td>
+                        <td className="py-2.5 px-3 font-semibold text-gray-800">{inv.supplier_name || '—'}</td>
+                        <td className="py-2.5 px-3 text-xs text-gray-500">{inv.invoice_date}</td>
+                        <td className="py-2.5 px-3 text-right font-medium text-gray-900">{fmt(inv.total_amount)}</td>
+                        <td className="py-2.5 px-3 text-right font-semibold text-emerald-700">{fmt(inv.paid_amount)}</td>
+                        <td className="py-2.5 px-3 text-right font-semibold text-rose-600">{fmt(balance)}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${balance <= 0
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : inv.paid_amount > 0
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}>
+                            {balance <= 0 ? 'Paid' : inv.paid_amount > 0 ? 'Partial' : 'Unpaid'}
                           </span>
                         </td>
-                        <td className="text-right">
+                        <td className="py-2.5 px-3 text-right">
                           <button
                             onClick={() => handleViewInvoiceDetails(inv)}
-                            className="btn btn-secondary btn-sm p-1.5 text-cyan-400"
+                            className="btn btn-secondary btn-sm p-1.5 text-teal-700 hover:text-teal-900 hover:bg-teal-50"
                             title="View items breakdown"
                           >
                             <Eye size={15} />
@@ -418,37 +436,37 @@ export default function Purchases() {
             /* ── Suppliers Table ── */
             <table className="table w-full">
               <thead>
-                <tr>
-                  <th>Supplier Name</th>
-                  <th>Contact Person</th>
-                  <th>Phone</th>
-                  <th>Address</th>
-                  <th className="text-right">Outstanding Balance</th>
-                  <th className="text-right">Actions</th>
+                <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs">
+                  <th className="py-2.5 px-3">Supplier Name</th>
+                  <th className="py-2.5 px-3">Contact Person</th>
+                  <th className="py-2.5 px-3">Phone</th>
+                  <th className="py-2.5 px-3">Address</th>
+                  <th className="py-2.5 px-3 text-right">Outstanding Balance</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-100">
                 {suppliers.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-800/40">
-                    <td className="font-bold text-white">{s.name}</td>
-                    <td className="text-slate-300">{s.contact_person || '—'}</td>
-                    <td className="font-mono text-xs text-slate-300">{s.phone || '—'}</td>
-                    <td className="text-xs text-slate-400">{s.address || '—'}</td>
-                    <td className={`text-right font-bold ${s.balance > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
+                    <td className="py-2.5 px-3 font-bold text-gray-900">{s.name}</td>
+                    <td className="py-2.5 px-3 text-gray-700">{s.contact_person || '—'}</td>
+                    <td className="py-2.5 px-3 font-mono text-xs text-gray-600">{s.phone || '—'}</td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500">{s.address || '—'}</td>
+                    <td className={`py-2.5 px-3 text-right font-bold ${parseFloat(s.balance) > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
                       {fmt(s.balance)}
                     </td>
-                    <td className="text-right">
+                    <td className="py-2.5 px-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleOpenRecordPayment(s)}
-                          className="btn btn-secondary btn-sm text-xs py-1 px-2 text-emerald-400"
+                          className="btn btn-secondary btn-sm text-xs py-1 px-2.5 text-teal-700 hover:text-teal-800 hover:bg-teal-50 border border-teal-200 font-semibold flex items-center gap-1 shadow-sm"
                           title="Record payment made to supplier"
                         >
-                          Pay
+                          <CreditCard size={13} /> Pay
                         </button>
                         <button
                           onClick={() => handleOpenEditSupplier(s)}
-                          className="btn btn-secondary btn-sm text-xs py-1 px-2"
+                          className="btn btn-secondary btn-sm text-xs py-1 px-2.5 text-gray-700 hover:text-gray-900 font-semibold"
                         >
                           Edit
                         </button>
@@ -465,25 +483,31 @@ export default function Purchases() {
       {/* ── New Purchase Invoice Modal ── */}
       {newInvoiceModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content max-w-4xl">
-            <div className="modal-header">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                <TruckIcon size={20} className="text-cyan-400" /> New Purchase Invoice & Batch Entry
+          <div className="modal-content max-w-4xl bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="modal-header px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h3 className="modal-title text-base font-bold text-gray-900 flex items-center gap-2">
+                <TruckIcon size={18} className="text-teal-700" /> New Purchase Invoice & Batch Entry
               </h3>
-              <button onClick={() => setNewInvoiceModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
+              <button
+                type="button"
+                onClick={() => setNewInvoiceModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md"
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveInvoice} className="modal-body p-4 flex flex-col gap-4 max-h-[80vh] overflow-y-auto">
-              <div className="grid grid-cols-3 gap-3 bg-slate-900 p-3 rounded-lg border border-slate-800">
+            <form onSubmit={handleSaveInvoice} className="modal-body p-5 flex flex-col gap-4 max-h-[80vh] overflow-y-auto bg-white">
+              <div className="grid grid-cols-3 gap-3 border-0 bg-gray-50 p-3.5 rounded-lg ">
                 <div>
-                  <label className="text-xs text-slate-300 font-semibold block mb-1">Supplier *</label>
+                  <label className="text-xs text-gray-700 font-semibold block mb-1">
+                    Supplier <span className="text-rose-500">*</span>
+                  </label>
                   <select
                     required
                     value={selectedSupplierId}
                     onChange={(e) => setSelectedSupplierId(e.target.value)}
-                    className="input text-sm py-1.5 w-full"
+                    className="input text-xs py-1.5 w-full border-gray-300 bg-white"
                   >
                     <option value="">Select Supplier</option>
                     {suppliers.map((s) => (
@@ -493,24 +517,28 @@ export default function Purchases() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-300 font-semibold block mb-1">Invoice / Bill # *</label>
+                  <label className="text-xs text-gray-700 font-semibold block mb-1">
+                    Invoice / Bill # <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
-                    className="input text-sm py-1.5 w-full font-mono"
+                    className="input text-xs py-1.5 w-full font-mono border-gray-300"
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-300 font-semibold block mb-1">Invoice Date *</label>
+                  <label className="text-xs text-gray-700 font-semibold block mb-1">
+                    Invoice Date <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="date"
                     required
                     value={invoiceDate}
                     onChange={(e) => setInvoiceDate(e.target.value)}
-                    className="input text-sm py-1.5 w-full"
+                    className="input text-xs py-1.5 w-full border-gray-300"
                   />
                 </div>
               </div>
@@ -518,13 +546,13 @@ export default function Purchases() {
               {/* Medicine Batches List */}
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-teal-800 uppercase tracking-wider">
                     Medicines & Batches Received
                   </span>
                   <button
                     type="button"
                     onClick={addItemRow}
-                    className="btn btn-secondary btn-sm text-xs flex items-center gap-1"
+                    className="btn btn-secondary btn-sm text-xs flex items-center gap-1 border-teal-200 text-teal-700 hover:bg-teal-50"
                   >
                     <Plus size={14} /> Add Line Item
                   </button>
@@ -532,13 +560,13 @@ export default function Purchases() {
 
                 <div className="flex flex-col gap-2">
                   {items.map((it, idx) => (
-                    <div key={idx} className="p-3 bg-slate-900 rounded-lg border border-slate-800 grid grid-cols-12 gap-2 items-center">
+                    <div key={idx} className="p-3 bg-gray-50 rounded-lg border border-gray-200 grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-3">
-                        <label className="text-[10px] text-slate-400 block mb-0.5">Medicine</label>
+                        <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Medicine</label>
                         <select
                           value={it.medicine_id}
                           onChange={(e) => handleItemMedicineChange(idx, e.target.value)}
-                          className="input text-xs py-1 w-full"
+                          className="input text-xs py-1 w-full border-gray-300 bg-white"
                         >
                           <option value="">Select Medicine</option>
                           {allMedicines.map((m) => (
@@ -548,58 +576,58 @@ export default function Purchases() {
                       </div>
 
                       <div className="col-span-2">
-                        <label className="text-[10px] text-slate-400 block mb-0.5">Batch #</label>
+                        <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Batch #</label>
                         <input
                           type="text"
                           placeholder="e.g. B-998"
                           value={it.batch_number}
                           onChange={(e) => handleItemFieldChange(idx, 'batch_number', e.target.value)}
-                          className="input text-xs py-1 w-full font-mono uppercase"
+                          className="input text-xs py-1 w-full font-mono uppercase border-gray-300"
                         />
                       </div>
 
                       <div className="col-span-2">
-                        <label className="text-[10px] text-slate-400 block mb-0.5">Expiry Date</label>
+                        <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Expiry Date</label>
                         <input
                           type="date"
                           value={it.expiry_date}
                           onChange={(e) => handleItemFieldChange(idx, 'expiry_date', e.target.value)}
-                          className="input text-xs py-1 w-full"
+                          className="input text-xs py-1 w-full border-gray-300"
                         />
                       </div>
 
                       <div className="col-span-1">
-                        <label className="text-[10px] text-slate-400 block mb-0.5">Packs</label>
+                        <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Packs</label>
                         <input
                           type="number"
                           min="1"
                           value={it.quantity_packs}
                           onChange={(e) => handleItemFieldChange(idx, 'quantity_packs', e.target.value)}
-                          className="input text-xs py-1 w-full text-center"
+                          className="input text-xs py-1 w-full text-center border-gray-300"
                         />
                       </div>
 
                       <div className="col-span-2">
-                        <label className="text-[10px] text-slate-400 block mb-0.5">Cost/Pack (PKR)</label>
+                        <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Cost/Pack (PKR)</label>
                         <input
                           type="number"
                           step="0.01"
                           placeholder="Cost"
                           value={it.purchase_price}
                           onChange={(e) => handleItemFieldChange(idx, 'purchase_price', e.target.value)}
-                          className="input text-xs py-1 w-full text-right"
+                          className="input text-xs py-1 w-full text-right border-gray-300"
                         />
                       </div>
 
                       <div className="col-span-1">
-                        <label className="text-[10px] text-slate-400 block mb-0.5">Sale/Pack</label>
+                        <label className="text-[10px] text-gray-500 font-medium block mb-0.5">Sale/Pack</label>
                         <input
                           type="number"
                           step="0.01"
                           placeholder="Retail"
                           value={it.sale_price}
                           onChange={(e) => handleItemFieldChange(idx, 'sale_price', e.target.value)}
-                          className="input text-xs py-1 w-full text-right"
+                          className="input text-xs py-1 w-full text-right border-gray-300"
                         />
                       </div>
 
@@ -608,7 +636,7 @@ export default function Purchases() {
                           type="button"
                           onClick={() => removeItemRow(idx)}
                           disabled={items.length === 1}
-                          className="text-slate-500 hover:text-rose-400 p-1"
+                          className="text-gray-400 hover:text-rose-600 p-1 disabled:opacity-30"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -619,38 +647,45 @@ export default function Purchases() {
               </div>
 
               {/* Totals & Payment */}
-              <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 flex justify-between items-center">
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 flex justify-between items-center">
                 <div>
-                  <div className="text-xs text-slate-400">Total Purchase Amount:</div>
-                  <div className="text-2xl font-black text-cyan-400">{fmt(invoiceSubtotal)}</div>
+                  <div className="text-xs text-gray-500 font-medium">Total Purchase Amount:</div>
+                  <div className="text-2xl font-black text-teal-800">{fmt(invoiceSubtotal)}</div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <div>
-                    <label className="text-xs text-slate-300 font-semibold block mb-1">Paid Now (PKR)</label>
+                    <label className="text-xs text-gray-700 font-semibold block mb-1">Paid Now (PKR)</label>
                     <input
                       type="number"
                       step="0.01"
                       placeholder="0.00"
                       value={paidNow}
                       onChange={(e) => setPaidNow(e.target.value)}
-                      className="input text-sm py-1.5 w-40 text-right font-bold text-emerald-400"
+                      className="input text-sm py-1.5 w-40 text-right font-bold text-emerald-700 border-gray-300"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 block mb-1">Balance Due</label>
-                    <div className="text-sm font-bold text-rose-400 pt-1.5">
+                    <label className="text-xs text-gray-500 font-medium block mb-1">Balance Due</label>
+                    <div className="text-sm font-bold text-rose-600 pt-1.5">
                       {fmt(Math.max(0, invoiceSubtotal - (parseFloat(paidNow) || 0)))}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="modal-footer pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button type="button" onClick={() => setNewInvoiceModalOpen(false)} className="btn btn-secondary py-2">
+              <div className="modal-footer pt-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 -mx-5 -mb-5 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => setNewInvoiceModalOpen(false)}
+                  className="btn btn-secondary py-2 px-4 text-xs font-semibold"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary py-2 font-bold">
+                <button
+                  type="submit"
+                  className="btn btn-primary py-2 px-4 text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-sm"
+                >
                   Save Purchase & Receive Stock
                 </button>
               </div>
@@ -662,51 +697,68 @@ export default function Purchases() {
       {/* ── View Purchase Invoice Details Modal ── */}
       {viewInvoiceModal && (
         <div className="modal-backdrop">
-          <div className="modal-content max-w-2xl">
-            <div className="modal-header">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                <FileText size={18} className="text-cyan-400" /> Invoice #{viewInvoiceModal.invoice_number}
+          <div className="modal-content max-w-2xl bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="modal-header px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h3 className="modal-title text-base font-bold text-gray-900 flex items-center gap-2">
+                <FileText size={18} className="text-teal-700" /> Invoice #{viewInvoiceModal.invoice_number}
               </h3>
-              <button onClick={() => setViewInvoiceModal(null)} className="text-slate-400 hover:text-white">
-                <X size={20} />
+              <button
+                type="button"
+                onClick={() => setViewInvoiceModal(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md"
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <div className="modal-body p-4 flex flex-col gap-4">
-              <div className="grid grid-cols-3 gap-2 bg-slate-900 p-3 rounded text-xs border border-slate-800">
-                <div>Supplier: <span className="font-semibold text-white">{viewInvoiceModal.supplier_name}</span></div>
-                <div>Date: <span className="text-slate-300">{viewInvoiceModal.invoice_date}</span></div>
-                <div>Total: <span className="font-bold text-emerald-400">{fmt(viewInvoiceModal.total_amount)}</span></div>
+            <div className="modal-body p-5 flex flex-col gap-4 bg-white">
+              <div className="grid grid-cols-3 gap-3 bg-gray-50 p-3.5 rounded-lg text-xs border border-gray-200">
+                <div>
+                  <span className="text-gray-500">Supplier:</span>{' '}
+                  <span className="font-semibold text-gray-900">{viewInvoiceModal.supplier_name || '—'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Date:</span>{' '}
+                  <span className="font-medium text-gray-800">{viewInvoiceModal.purchase_date || viewInvoiceModal.invoice_date}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Total:</span>{' '}
+                  <span className="font-bold text-teal-800">{fmt(viewInvoiceModal.total_amount)}</span>
+                </div>
               </div>
 
               <table className="table w-full text-xs">
                 <thead>
-                  <tr>
-                    <th>Medicine</th>
-                    <th>Batch</th>
-                    <th>Expiry</th>
-                    <th className="text-center">Units Received</th>
-                    <th className="text-right">Unit Cost</th>
-                    <th className="text-right">Subtotal</th>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-gray-600">
+                    <th className="py-2 px-2.5">Medicine</th>
+                    <th className="py-2 px-2.5">Batch</th>
+                    <th className="py-2 px-2.5">Expiry</th>
+                    <th className="py-2 px-2.5 text-center">Units Received</th>
+                    <th className="py-2 px-2.5 text-right">Unit Cost</th>
+                    <th className="py-2 px-2.5 text-right">Subtotal</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-100">
                   {viewInvoiceModal.items?.map((it, idx) => (
-                    <tr key={idx}>
-                      <td className="font-semibold text-white">{it.medicine_name}</td>
-                      <td className="font-mono text-cyan-300">{it.batch_number}</td>
-                      <td>{it.expiry_date}</td>
-                      <td className="text-center">{it.quantity}</td>
-                      <td className="text-right">{fmt(it.purchase_price)}</td>
-                      <td className="text-right font-bold text-slate-200">{fmt(it.subtotal)}</td>
+                    <tr key={idx} className="hover:bg-gray-50/60">
+                      <td className="py-2 px-2.5 font-semibold text-gray-900">{it.medicine_name}</td>
+                      <td className="py-2 px-2.5 font-mono text-teal-700">{it.batch_number}</td>
+                      <td className="py-2 px-2.5 text-gray-600">{it.expiry_date}</td>
+                      <td className="py-2 px-2.5 text-center font-medium">{it.quantity}</td>
+                      <td className="py-2 px-2.5 text-right">{fmt(it.unit_purchase_cost || it.purchase_price)}</td>
+                      <td className="py-2 px-2.5 text-right font-bold text-gray-800">{fmt(it.line_total || it.subtotal)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <div className="modal-footer p-4 border-t border-slate-800 flex justify-end">
-              <button onClick={() => setViewInvoiceModal(null)} className="btn btn-secondary py-1.5">
+            <div className="modal-footer p-4 border-t border-gray-100 flex justify-end bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setViewInvoiceModal(null)}
+                className="btn btn-secondary py-1.5 px-4 text-xs font-semibold"
+              >
                 Close
               </button>
             </div>
@@ -717,67 +769,94 @@ export default function Purchases() {
       {/* ── Add / Edit Supplier Modal ── */}
       {supplierModalOpen && (
         <div className="modal-backdrop">
-          <div className="modal-content max-w-md">
-            <div className="modal-header">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                <Building2 size={18} className="text-cyan-400" /> {editingSupplier ? 'Edit Supplier' : 'Add Supplier'}
+          <div className="modal-content max-w-md bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="modal-header px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h3 className="modal-title text-base font-bold text-gray-900 flex items-center gap-2">
+                <Building2 size={18} className="text-teal-700" /> {editingSupplier ? 'Edit Supplier' : 'Add Supplier'}
               </h3>
-              <button onClick={() => setSupplierModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
+              <button
+                type="button"
+                onClick={() => setSupplierModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md"
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveSupplier} className="modal-body p-4 flex flex-col gap-3">
+            <form onSubmit={handleSaveSupplier} className="modal-body p-5 flex flex-col gap-3.5 bg-white">
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">Company / Supplier Name *</label>
+                <label className="text-xs text-gray-700 font-semibold block mb-1">
+                  Company / Supplier Name <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
                   value={supplierFormData.name}
                   onChange={(e) => setSupplierFormData({ ...supplierFormData, name: e.target.value })}
                   placeholder="e.g. Allied Pharma Distributors"
-                  className="input text-sm py-2 w-full"
+                  className="input text-xs py-2 w-full border-gray-300"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">Contact Person</label>
+                <label className="text-xs text-gray-700 font-semibold block mb-1">Contact Person</label>
                 <input
                   type="text"
                   value={supplierFormData.contact_person}
                   onChange={(e) => setSupplierFormData({ ...supplierFormData, contact_person: e.target.value })}
                   placeholder="e.g. Muhammad Aslam"
-                  className="input text-sm py-2 w-full"
+                  className="input text-xs py-2 w-full border-gray-300"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">Phone Number</label>
+                <label className="text-xs text-gray-700 font-semibold block mb-1">Phone Number</label>
                 <input
                   type="text"
                   value={supplierFormData.phone}
                   onChange={(e) => setSupplierFormData({ ...supplierFormData, phone: e.target.value })}
                   placeholder="0300-1234567"
-                  className="input text-sm py-2 w-full"
+                  className="input text-xs py-2 w-full border-gray-300 font-mono"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">Office Address</label>
+                <label className="text-xs text-gray-700 font-semibold block mb-1">Office Address</label>
                 <input
                   type="text"
                   value={supplierFormData.address}
                   onChange={(e) => setSupplierFormData({ ...supplierFormData, address: e.target.value })}
                   placeholder="e.g. Circular Road, Lahore"
-                  className="input text-sm py-2 w-full"
+                  className="input text-xs py-2 w-full border-gray-300"
                 />
               </div>
 
-              <div className="modal-footer pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button type="button" onClick={() => setSupplierModalOpen(false)} className="btn btn-secondary py-2">
+              {!editingSupplier && (
+                <div>
+                  <label className="text-xs text-gray-700 font-semibold block mb-1">Opening Balance (PKR)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={supplierFormData.opening_balance}
+                    onChange={(e) => setSupplierFormData({ ...supplierFormData, opening_balance: e.target.value })}
+                    placeholder="0.00 (previous unpaid ledger balance)"
+                    className="input text-xs py-2 w-full border-gray-300"
+                  />
+                </div>
+              )}
+
+              <div className="modal-footer pt-3 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 -mx-5 -mb-5 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => setSupplierModalOpen(false)}
+                  className="btn btn-secondary py-2 px-4 text-xs font-semibold"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary py-2 font-bold">
+                <button
+                  type="submit"
+                  className="btn btn-primary py-2 px-4 text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-sm"
+                >
                   Save Supplier
                 </button>
               </div>
@@ -789,54 +868,101 @@ export default function Purchases() {
       {/* ── Record Payment Modal ── */}
       {paymentModalOpen && paymentSupplier && (
         <div className="modal-backdrop">
-          <div className="modal-content max-w-md">
-            <div className="modal-header">
-              <h3 className="font-bold text-lg text-white flex items-center gap-2">
-                <CreditCard size={18} className="text-emerald-400" /> Record Supplier Payment
+          <div className="modal-content max-w-md bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+            <div className="modal-header px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white">
+              <h3 className="modal-title text-base font-bold text-gray-900 flex items-center gap-2">
+                <CreditCard size={18} className="text-teal-700" /> Record Supplier Payment
               </h3>
-              <button onClick={() => setPaymentModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
+              <button
+                type="button"
+                onClick={() => setPaymentModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md"
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSavePayment} className="modal-body p-4 flex flex-col gap-4">
-              <div className="bg-slate-900 p-3 rounded border border-slate-800 text-xs">
-                <div className="font-bold text-white text-sm">{paymentSupplier.name}</div>
-                <div className="text-slate-400 mt-1">
-                  Current Outstanding Due: <span className="font-bold text-rose-400">{fmt(paymentSupplier.balance)}</span>
+            <form onSubmit={handleSavePayment} className="modal-body p-5 flex flex-col gap-4 bg-white">
+              {/* Supplier info banner */}
+              <div className="bg-teal-50/60 border border-teal-100/80 p-3.5 rounded-lg text-xs">
+                <div className="font-bold text-gray-900 text-sm">{paymentSupplier.name}</div>
+                <div className="text-gray-600 mt-1 flex items-center justify-between">
+                  <span>Current Outstanding Due:</span>
+                  <span className={`font-bold text-sm ${parseFloat(paymentSupplier.balance) > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                    {fmt(paymentSupplier.balance)}
+                  </span>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">Payment Amount (PKR) *</label>
+                <label className="text-xs text-gray-700 font-semibold block mb-1">
+                  Payment Amount (PKR) <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   required
                   autoFocus
+                  placeholder="0.00"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="input text-base font-bold py-2 w-full text-emerald-400"
+                  className="input text-base font-bold py-2 w-full text-teal-800 border-gray-300 focus:border-teal-700 focus:ring-1 focus:ring-teal-700"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-700 font-semibold block mb-1">
+                    Payment Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    className="input text-xs py-2 w-full border-gray-300"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-700 font-semibold block mb-1">Payment Method</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="input text-xs py-2 w-full border-gray-300 bg-white"
+                  >
+                    <option value="CASH">Cash</option>
+                    <option value="BANK_TRANSFER">Bank Transfer</option>
+                    <option value="CHEQUE">Cheque</option>
+                    <option value="ONLINE">Online / Card</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="text-xs text-slate-300 font-semibold block mb-1">Notes / Cheque #</label>
+                <label className="text-xs text-gray-700 font-semibold block mb-1">Notes / Cheque #</label>
                 <input
                   type="text"
-                  placeholder="e.g. Bank Transfer / Cheque #10293"
+                  placeholder="e.g. Bank Transfer Ref / Cheque #10293"
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
-                  className="input text-sm py-2 w-full"
+                  className="input text-xs py-2 w-full border-gray-300"
                 />
               </div>
 
-              <div className="modal-footer pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button type="button" onClick={() => setPaymentModalOpen(false)} className="btn btn-secondary py-2">
+              <div className="modal-footer pt-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 -mx-5 -mb-5 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalOpen(false)}
+                  className="btn btn-secondary py-2 px-4 text-xs font-semibold"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-success py-2 font-bold">
-                  Confirm Payment
+                <button
+                  type="submit"
+                  className="btn btn-primary py-2 px-4 text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white flex items-center gap-1.5 shadow-sm"
+                >
+                  <Check size={16} /> Confirm Payment
                 </button>
               </div>
             </form>

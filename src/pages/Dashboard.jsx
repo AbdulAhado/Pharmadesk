@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const api = window.api;
 
@@ -20,7 +21,9 @@ export default function Dashboard() {
   // Interactive chart hover state
   const [hoveredPointIndex, setHoveredPointIndex] = useState(4); // default Thursday (index 4)
 
-  // Close Day modal & Sync/Backup feedback
+  // Close Day / Open Shift modals & Sync/Backup feedback
+  const [openDayModalOpen, setOpenDayModalOpen] = useState(false);
+  const [openingCashInput, setOpeningCashInput] = useState('');
   const [closeDayModalOpen, setCloseDayModalOpen] = useState(false);
   const [closingCashInput, setClosingCashInput] = useState('');
   const [closingNotes, setClosingNotes] = useState('');
@@ -67,7 +70,7 @@ export default function Dashboard() {
       if (t) setTopMeds(t);
       if (a) setAlerts(a);
       if (cr) setCashReport(cr);
-      if (cs) setCashSession(cs);
+      setCashSession(cs || null);
       if (cat) setCategorySales(cat);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
@@ -115,25 +118,58 @@ export default function Dashboard() {
     }
   };
 
+  // Open Shift / Day action
+  const handleOpenDaySubmit = async (e) => {
+    e.preventDefault();
+    const floatVal = parseFloat(openingCashInput) || 0;
+    try {
+      if (!api.expenses?.openCashSession) {
+        toast.error('Cash session service unavailable');
+        return;
+      }
+      await api.expenses.openCashSession({
+        opening_cash: floatVal,
+        opening_balance: floatVal,
+      });
+      setOpenDayModalOpen(false);
+      setOpeningCashInput('');
+      toast.success(`Shift opened with ${fmt(floatVal)} cash float!`);
+      loadData();
+    } catch (err) {
+      toast.error('Failed to open shift: ' + (err.message || 'Error'));
+    }
+  };
+
   // Close Day action
   const handleCloseDaySubmit = async (e) => {
     e.preventDefault();
+    if (!cashSession?.id) {
+      toast.error('No active cash session is open. Open a shift first.');
+      setCloseDayModalOpen(false);
+      return;
+    }
+    const actual = parseFloat(closingCashInput) || 0;
     try {
-      if (api.expenses?.closeCashSession && cashSession?.id) {
-        await api.expenses.closeCashSession({
-          sessionId: cashSession.id,
-          actualCash: parseFloat(closingCashInput) || 0,
-          closingNotes,
-        });
-      }
+      const res = await api.expenses.closeCashSession({
+        id: cashSession.id,
+        sessionId: cashSession.id,
+        counted_cash: actual,
+        closing_balance: actual,
+        actualCash: actual,
+        notes: closingNotes,
+      });
       setCloseDayModalOpen(false);
       setClosingCashInput('');
       setClosingNotes('');
-      alert('Day closed successfully. Cash drawer session finalized.');
+      const diffText = res?.difference === 0
+        ? 'Drawer balanced!'
+        : res?.difference > 0
+          ? `Excess: ${fmt(res.difference)}`
+          : `Shortage: ${fmt(Math.abs(res?.difference || 0))}`;
+      toast.success(`Day closed! ${diffText}`);
       loadData();
-    } catch (e) {
-      alert('Session closed: ' + (e.message || 'Completed'));
-      setCloseDayModalOpen(false);
+    } catch (err) {
+      toast.error('Close day error: ' + (err.message || 'Failed to close session'));
     }
   };
 
@@ -238,12 +274,14 @@ export default function Dashboard() {
     status: (inv.total_amount <= (inv.paid_amount || inv.total_amount)) ? 'Paid' : 'Partial'
   }));
 
-  // Real Cash Drawer data
+  // Real Cash Drawer data (prefer active session totals when OPEN)
   const openingCash = cashSession?.opening_cash || 0;
-  const cashSales = cashReport?.cash_sales || 0;
-  const cardSales = cashReport?.card_sales || 0;
-  const expenses = cashReport?.cash_expenses || 0;
-  const expectedDrawerCash = openingCash + cashSales - expenses;
+  const cashSales = cashSession?.status === 'OPEN' ? (cashSession.cash_sales ?? 0) : (cashReport?.cash_sales || 0);
+  const cardSales = cashSession?.status === 'OPEN' ? (cashSession.card_sales ?? 0) : (cashReport?.card_sales || 0);
+  const expenses = cashSession?.status === 'OPEN' ? ((cashSession.cash_expenses ?? 0) + (cashSession.cash_returns ?? 0)) : (cashReport?.cash_expenses || 0);
+  const expectedDrawerCash = cashSession?.status === 'OPEN'
+    ? (cashSession.expected_closing_cash ?? (openingCash + cashSales - expenses))
+    : (openingCash + cashSales - expenses);
 
   // Real Dynamic Chart Calculation
   const defaultBaseline = [
@@ -395,16 +433,28 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Close Day Button */}
-            <button
-              onClick={() => setCloseDayModalOpen(true)}
-              style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px solid #D0D5DD', borderRadius: 8, background: '#FFFFFF', color: '#344054', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.05)' }}
-            >
-              <svg className="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#667085' }}>
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-              Close Day
-            </button>
+            {/* Open Shift / Close Day Button */}
+            {cashSession?.status === 'OPEN' ? (
+              <button
+                onClick={() => setCloseDayModalOpen(true)}
+                style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px solid #FCA5A5', borderRadius: 8, background: '#FEF2F2', color: '#B91C1C', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.05)' }}
+              >
+                <svg className="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#B91C1C' }}>
+                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                Close Day
+              </button>
+            ) : (
+              <button
+                onClick={() => setOpenDayModalOpen(true)}
+                style={{ height: 32, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px solid #0F766E', borderRadius: 8, background: '#F0FDFA', color: '#0F766E', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(16,24,40,0.05)' }}
+              >
+                <svg className="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#0F766E' }}>
+                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+                </svg>
+                Open Shift
+              </button>
+            )}
           </div>
         </div>
 
@@ -1130,6 +1180,49 @@ export default function Dashboard() {
         </div>
 
       </main>
+
+      {/* ── Open Shift / Day Modal ── */}
+      {openDayModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal modal-md">
+            <div className="modal-header">
+              <h3 className="modal-title">Open Cash Shift / Start Day</h3>
+              <button className="ib" onClick={() => setOpenDayModalOpen(false)}>✕</button>
+            </div>
+            <form onSubmit={handleOpenDaySubmit}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: '#344054', display: 'block', marginBottom: 5 }}>
+                    Opening Cash Float (PKR) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="e.g. 5000"
+                    value={openingCashInput}
+                    onChange={(e) => setOpeningCashInput(e.target.value)}
+                    className="input w-full"
+                    autoFocus
+                  />
+                  <span style={{ fontSize: 11, color: '#667085', marginTop: 4, display: 'block' }}>
+                    Initial cash placed in the drawer for change at the start of the shift.
+                  </span>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => setOpenDayModalOpen(false)} className="btn btn-secondary btn-sm">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  Open Shift
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── Close Day Modal ── */}
       {closeDayModalOpen && (

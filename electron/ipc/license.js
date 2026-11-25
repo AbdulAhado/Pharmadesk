@@ -10,14 +10,19 @@ const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 
-// Configurable Licensing Server URL (default localhost:5000 in dev, configurable via settings)
+// Configurable Licensing Server URL (defaults to live Next.js license-admin on Vercel)
 function getLicensingServerUrl() {
   try {
     const db = getDb();
     const row = db.prepare("SELECT value FROM settings WHERE key = 'licensing_server_url'").get();
-    if (row && row.value) return row.value.trim().replace(/\/+$/, '');
+    if (row && row.value) {
+      const cleaned = row.value.trim().replace(/\/+$/, '');
+      if (cleaned && cleaned !== 'http://localhost:5000' && cleaned !== 'http://127.0.0.1:5000') {
+        return cleaned;
+      }
+    }
   } catch (_) {}
-  return process.env.PHARMADESK_LICENSING_SERVER || 'http://localhost:5000';
+  return process.env.PHARMADESK_LICENSING_SERVER || 'https://pharmadesk-rho.vercel.app';
 }
 
 /**
@@ -62,7 +67,8 @@ function requestJson(url, options = {}, payload = null) {
     });
 
     req.on('error', (err) => {
-      reject(new Error(`Licensing server unavailable: ${err.message}`));
+      const detail = err.message || err.code || (Array.isArray(err.errors) && err.errors[0]?.message) || 'Network error';
+      reject(new Error(`Licensing server unavailable: ${detail}`));
     });
 
     req.on('timeout', () => {
@@ -101,7 +107,7 @@ module.exports = function(ipcMain) {
   ipcMain.handle('license:getPlans', async () => {
     try {
       const serverUrl = getLicensingServerUrl();
-      const res = await requestJson(`${serverUrl}/api/v1/plans`);
+      const res = await requestJson(`${serverUrl}/api/plans`);
       if (res && res.plans && Array.isArray(res.plans)) {
         return res.plans;
       }
@@ -119,7 +125,7 @@ module.exports = function(ipcMain) {
     const serverUrl = getLicensingServerUrl();
 
     // Call licensing backend
-    const response = await requestJson(`${serverUrl}/api/v1/licenses/activate`, { method: 'POST' }, {
+    const response = await requestJson(`${serverUrl}/api/licenses/activate`, { method: 'POST' }, {
       licenseKey: licenseKey.trim().toUpperCase(),
       deviceId,
       pharmacyName: pharmacyName || undefined,
@@ -162,7 +168,7 @@ module.exports = function(ipcMain) {
     // Send to licensing backend if connected
     let serverAccepted = false;
     try {
-      await requestJson(`${serverUrl}/api/v1/renewal-requests`, { method: 'POST' }, {
+      await requestJson(`${serverUrl}/api/renewals`, { method: 'POST' }, {
         requestNumber,
         deviceId,
         requestedPlan,
@@ -191,7 +197,19 @@ module.exports = function(ipcMain) {
     const deviceId = getDeviceId();
     const serverUrl = getLicensingServerUrl();
 
-    const response = await requestJson(`${serverUrl}/api/v1/licenses/status?deviceId=${encodeURIComponent(deviceId)}`);
+    let response;
+    try {
+      response = await requestJson(`${serverUrl}/api/licenses/status?deviceId=${encodeURIComponent(deviceId)}`);
+    } catch (err) {
+      const isOffline = err.message && (err.message.includes('ECONNREFUSED') || err.message.includes('unavailable') || err.message.includes('timed out'));
+      return {
+        isRenewed: false,
+        serverUnavailable: true,
+        message: isOffline
+          ? 'Licensing server is unreachable. PharmaDesk is running in offline mode with your active local license.'
+          : `Licensing server check: ${err.message}`,
+      };
+    }
 
     if (response && response.licenseEnvelope) {
       // Server has issued a valid signed license
@@ -205,8 +223,8 @@ module.exports = function(ipcMain) {
 
     return {
       isRenewed: false,
-      pendingRequests: response.pendingRequests || 0,
-      message: response.message || 'No approved renewal license ready yet. Please wait for admin approval.',
+      pendingRequests: response?.pendingRequests || 0,
+      message: response?.message || 'No approved renewal license ready yet. Please wait for admin approval.',
     };
   });
 

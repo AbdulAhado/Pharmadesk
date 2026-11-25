@@ -18,6 +18,35 @@ contextBridge.exposeInMainWorld('api', {
     importCSV: (rows) => ipcRenderer.invoke('medicines:importCSV', rows),
   },
 
+  // ── Batches (Batch & Stock Management) ────────────────────────────────────
+  batches: {
+    getByMedicine: async (medicineId) => {
+      try {
+        return await ipcRenderer.invoke('batches:getByMedicine', medicineId);
+      } catch (err) {
+        if (err && err.message && err.message.includes('No handler registered')) {
+          return await ipcRenderer.invoke('inventory:getBatches', medicineId);
+        }
+        throw err;
+      }
+    },
+    getById: (batchId) => ipcRenderer.invoke('batches:getById', batchId),
+    create: (data) => ipcRenderer.invoke('batches:create', data),
+    update: (id, data) => ipcRenderer.invoke('batches:update', id, data),
+    adjustStock: async (data) => {
+      try {
+        return await ipcRenderer.invoke('batches:adjustStock', data);
+      } catch (err) {
+        if (err && err.message && err.message.includes('No handler registered')) {
+          return await ipcRenderer.invoke('inventory:adjustStock', data);
+        }
+        throw err;
+      }
+    },
+    getHistory: (batchId) => ipcRenderer.invoke('batches:getHistory', batchId),
+    delete: (batchId) => ipcRenderer.invoke('batches:delete', batchId),
+  },
+
   // ── Inventory ──────────────────────────────────────────────────────────────
   inventory: {
     getOverview: (filters) => ipcRenderer.invoke('inventory:getOverview', filters),
@@ -133,6 +162,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   print: {
     receipt: (html) => ipcRenderer.invoke('print:receipt', html),
+    getPrinters: () => ipcRenderer.invoke('print:getPrinters'),
+    testReceipt: () => ipcRenderer.invoke('print:testReceipt'),
   },
 
   // ── Auto-Updater ──────────────────────────────────────────────────────────

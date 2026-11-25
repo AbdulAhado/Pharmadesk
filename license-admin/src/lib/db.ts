@@ -75,6 +75,19 @@ export async function connectDB(): Promise<Db> {
       console.error('[MongoDB] Client cleanup failed:', closeError);
     });
 
+    if (
+      error instanceof Error &&
+      (error.message.includes('alert number 80') ||
+        error.message.includes('tlsv1 alert internal error') ||
+        error.message.includes('rec_layer_s3.c'))
+    ) {
+      const friendlyError = new Error(
+        'MongoDB Atlas connection rejected (SSL Alert 80). Your current IP address is not whitelisted in MongoDB Atlas. Please log into MongoDB Atlas, go to "Network Access", and add "0.0.0.0/0" (Allow access from anywhere).'
+      );
+      friendlyError.name = 'MongoAtlasIPBlockedError';
+      throw friendlyError;
+    }
+
     throw error;
   }
 }
