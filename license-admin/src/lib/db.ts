@@ -1,12 +1,7 @@
 
 import { MongoClient, Db, Collection, Document } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI!;
 const DB_NAME = 'pharmadesk_licensing';
-
-if (!MONGODB_URI) {
-  throw new Error('[MongoDB] MONGODB_URI environment variable is not set');
-}
 
 let cached: { client: MongoClient; db: Db } | null = null;
 
@@ -15,6 +10,11 @@ export async function connectDB(): Promise<Db> {
   if (cached) {
     console.log('[MongoDB] Using existing database connection');
     return cached.db;
+  }
+
+  const MONGODB_URI = process.env.MONGODB_URI;
+  if (!MONGODB_URI) {
+    throw new Error('[MongoDB] MONGODB_URI environment variable is not set');
   }
 
   console.log('========================================');
